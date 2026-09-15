@@ -1,0 +1,8 @@
+{
+  "clientId": "596130829554-dgiorsc23e95b0n7a1avotg0i5s4lmkv.apps.googleusercontent.com",
+  "clientSecret": "",
+  "webOrigin": "http://localhost:8080",
+  "redirectUri": "http://localhost:8080/api/auth/google/callback",
+  "setupStatus": "configured",
+  "updatedAt": 1788959091274
+}

@@ -1,0 +1,10 @@
+<resources>
+    <color name="primary_background">#F8F6F0</color>
+    <color name="card_surface">#FFFFFF</color>
+    <color name="pill_buttons">#1A1A1A</color>
+    <color name="scanner_center">#6200EE</color>
+    <color name="carbs_accent">#EE924F</color>
+    <color name="protein_accent">#1D3F37</color>
+    <color name="steps_accent">#D4F162</color>
+    <color name="sleep_accent">#E8D5C4</color>
+</resources>

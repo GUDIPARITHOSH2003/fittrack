@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitTrack - Fitness & Calorie Tracker (Jetpack Compose Frontend Preview)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=meal_breakdown_v1">
+  <!-- Official Google Identity Services SDK for Web & Native OAuth -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <!-- Top App Navigation / Environment Header -->
+  <header class="dev-header">
+    <div class="dev-brand">
+      <span class="pulse-dot"></span>
+      <strong>FitTrack</strong> Native Android (Jetpack Compose) Frontend Preview
+    </div>
+    <div class="dev-meta">
+      <span class="token-badge"><span class="color-dot bg-sand"></span>#F8F6F0</span>
+      <span class="token-badge"><span class="color-dot bg-scanner"></span>#6200EE</span>
+      <span class="token-badge" style="background:#253494; color:#FFF;"><span class="color-dot" style="background:#FFF;"></span>#253494</span>
+      <button id="showIntroBtn" class="pill-btn-small" style="background:#253494;">Intro Splash</button>
+      <button id="showLoginBtn" class="pill-btn-small" style="background:#253494;">Login</button>
+      <button id="showSignUpBtn" class="pill-btn-small" style="background:#253494;">Sign Up</button>
+      <button id="showAppBtn" class="pill-btn-small" style="background:#6200EE;">Dashboard</button>
+      <button id="headerGoogleConfigBtn" class="pill-btn-small" style="background:#EA4335;" title="Configure Google Cloud OAuth 2.0 Client ID">Google Cloud Config</button>
+      <button id="toggleFrameBtn" class="pill-btn-small">Toggle Frame</button>
+    </div>
+  </header>
+
+  <main class="preview-container">
+    <!-- Phone Device Shell -->
+    <div class="phone-frame" id="phoneFrame">
+      <!-- Status Bar -->
+      <div class="status-bar">
+        <span class="status-time" id="statusClock">9:41</span>
+        <div class="notch"></div>
+        <div class="status-icons">
+          <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor">
+            <path d="M1 9h2v3H1zm4-3h2v6H5zm4-3h2v9H9zm4-3h2v12h-2z"/>
+          </svg>
+          <svg width="15" height="12" viewBox="0 0 15 12" fill="currentColor">
+            <path d="M7.5 3C9.8 3 11.9 3.9 13.5 5.4L15 3.8C13 2 10.4 1 7.5 1S2 2 0 3.8l1.5 1.6C3.1 3.9 5.2 3 7.5 3zm0 4c1.3 0 2.5.5 3.4 1.4L12.4 7C11.1 5.8 9.4 5 7.5 5S3.9 5.8 2.6 7l1.5 1.4C5 7.5 6.2 7 7.5 7zm0 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
+          </svg>
+          <svg width="20" height="12" viewBox="0 0 20 12" fill="currentColor">
+            <rect x="1" y="1" width="16" height="10" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M18 4.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <rect x="2.5" y="2.5" width="11" height="7" rx="1.5" fill="currentColor"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- ==================== AUTH FLOW (INTRO / LOGIN / SIGNUP) ==================== -->
+      <div class="auth-container" id="authContainer" style="display: none;">
+        <!-- 1. INTRO / SPLASH SCREEN (Deep Royal Blue Dribbble Concept) -->
+        <div class="auth-view" id="viewIntro">
+          <div class="intro-content">
+            <div class="intro-brand-box">
+              <h1 class="intro-brand-title">fittrack</h1>
+              <div class="intro-accent-dot"></div>
+            </div>
+            <p class="intro-tagline">Track calories, workouts &amp; recovery with ease.</p>
+            <div class="intro-action-box">
+              <button class="intro-btn-white" id="introEnterBtn">Get Started &rarr;</button>
+              <div class="intro-swipe-hint">Tap to sign in or create account</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. LOGIN SCREEN (Matches Dribbble Shot middle screen) -->
+        <div class="auth-view" id="viewLogin">
+          <div class="auth-header-bar">
+            <div class="auth-brand-logo">
+              <span class="brand-text">fittrack</span>
+              <span class="brand-dot"></span>
+            </div>
+          </div>
+
+          <div class="auth-body">
+            <h2 class="auth-heading">Login to your Account</h2>
+
+            <form id="loginForm" class="auth-form" onsubmit="return false;">
+              <div class="auth-input-card">
+                <input type="email" id="loginEmail" placeholder="Email" value="" required />
+              </div>
+
+              <div class="auth-input-card">
+                <input type="password" id="loginPassword" placeholder="Enter your password" required />
+              </div>
+
+              <div class="auth-error-alert" id="loginErrorAlert" style="display: none;"></div>
+
+              <button type="submit" class="auth-primary-btn" id="loginSubmitBtn">Sign in</button>
+            </form>
+
+            <div class="auth-divider">
+              <span>- Or sign in with -</span>
+            </div>
+
+            <!-- Google-Only Social Login Slot (Direct 1-Click to Google Chooser) -->
+            <div class="social-login-row single-social">
+              <div id="gsiLoginBtnContainer" class="gsi-direct-btn-slot"></div>
+              <button class="google-auth-card social-btn" id="googleLoginBtn" title="Continue with Google" style="display: none;">
+                <svg width="22" height="22" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <span class="google-btn-text">Continue with Google</span>
+              </button>
+            </div>
+
+            <div class="auth-switch-text">
+              Don't have an account? <button type="button" class="auth-link-btn" id="linkToSignUp">Sign up</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. SIGN UP SCREEN (Matches Dribbble Shot right screen) -->
+        <div class="auth-view" id="viewSignUp">
+          <div class="auth-header-bar with-back">
+            <button class="auth-back-btn" id="signUpBackBtn" title="Back to Login">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+            </button>
+            <div class="auth-brand-logo">
+              <span class="brand-text">fittrack</span>
+              <span class="brand-dot"></span>
+            </div>
+            <div style="width:36px;"></div>
+          </div>
+
+          <div class="auth-body">
+            <h2 class="auth-heading">Create your Account</h2>
+
+            <form id="signUpForm" class="auth-form" onsubmit="return false;">
+              <!-- 1. Full Name above Email -->
+              <div class="auth-input-card">
+                <input type="text" id="signUpName" placeholder="Full Name" value="" required />
+              </div>
+
+              <!-- 2. Email -->
+              <div class="auth-input-card">
+                <input type="email" id="signUpEmail" placeholder="Email" value="" required />
+              </div>
+
+              <!-- 3. Password & Confirm Password -->
+              <div class="auth-input-card">
+                <input type="password" id="signUpPassword" placeholder="Password (min. 6 characters)" required />
+              </div>
+
+              <div class="auth-input-card">
+                <input type="password" id="signUpConfirmPassword" placeholder="Confirm Password" required />
+              </div>
+
+              <!-- 4. Age, Weight, Height Metrics -->
+              <div class="auth-section-label">Physical Metrics</div>
+              <div class="auth-metrics-row">
+                <div class="auth-metric-card">
+                  <span class="auth-metric-title">Age</span>
+                  <div class="auth-metric-input-wrap">
+                    <input type="number" id="signUpAge" placeholder="e.g. 24" value="" min="12" max="100" required />
+                    <span class="auth-metric-unit">yrs</span>
+                  </div>
+                </div>
+
+                <div class="auth-metric-card">
+                  <span class="auth-metric-title">Weight</span>
+                  <div class="auth-metric-input-wrap">
+                    <input type="number" id="signUpWeight" placeholder="e.g. 70" value="" step="0.5" min="30" max="300" required />
+                    <span class="auth-metric-unit">kg</span>
+                  </div>
+                </div>
+
+                <div class="auth-metric-card">
+                  <span class="auth-metric-title">Height</span>
+                  <div class="auth-metric-input-wrap">
+                    <input type="number" id="signUpHeight" placeholder="e.g. 175" value="" min="100" max="250" required />
+                    <span class="auth-metric-unit">cm</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 5. Physical Activity Level (Gym / Workout Frequency) -->
+              <div class="auth-section-label">Gym &amp; Workout Frequency</div>
+              <div class="auth-activity-card">
+                <div class="activity-chips-grid">
+                  <button type="button" class="activity-chip" data-days="0-1" data-level="Light (0-1 days)">
+                    <span class="chip-days">0-1 days</span>
+                    <span class="chip-desc">Light / Rest</span>
+                  </button>
+                  <button type="button" class="activity-chip" data-days="2-3" data-level="Moderate (2-3 days)">
+                    <span class="chip-days">2-3 days</span>
+                    <span class="chip-desc">Moderate</span>
+                  </button>
+                  <button type="button" class="activity-chip" data-days="4-5" data-level="Active (4-5 days)">
+                    <span class="chip-days">4-5 days</span>
+                    <span class="chip-desc">Gym Active</span>
+                  </button>
+                  <button type="button" class="activity-chip" data-days="6-7" data-level="High (6-7 days)">
+                    <span class="chip-days">6-7 days</span>
+                    <span class="chip-desc">Athlete</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 6. Fitness Goal (Weight Loss / Maintain / Weight Gain) -->
+              <div class="auth-section-label">Fitness Goal</div>
+              <div class="auth-activity-card">
+                <div class="goal-chips-grid">
+                  <button type="button" class="goal-chip signup-goal-chip" data-goal="weight_loss">
+                    <span class="chip-goal-icon">📉</span>
+                    <div class="chip-goal-meta">
+                      <span class="chip-goal-title">Weight Loss</span>
+                      <span class="chip-goal-sub">-500 kcal deficit</span>
+                    </div>
+                  </button>
+                  <button type="button" class="goal-chip signup-goal-chip" data-goal="maintain">
+                    <span class="chip-goal-icon">⚖️</span>
+                    <div class="chip-goal-meta">
+                      <span class="chip-goal-title">Maintain</span>
+                      <span class="chip-goal-sub">Keep current weight</span>
+                    </div>
+                  </button>
+                  <button type="button" class="goal-chip signup-goal-chip" data-goal="weight_gain">
+                    <span class="chip-goal-icon">📈</span>
+                    <div class="chip-goal-meta">
+                      <span class="chip-goal-title">Weight Gain</span>
+                      <span class="chip-goal-sub">+500 kcal surplus</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <div class="auth-error-alert" id="signUpErrorAlert" style="display: none;"></div>
+
+              <button type="submit" class="auth-primary-btn" id="signUpSubmitBtn">Sign up</button>
+            </form>
+
+            <div class="auth-divider">
+              <span>- Or sign up with -</span>
+            </div>
+
+            <!-- Google-Only Social Sign Up Slot (Direct 1-Click to Google Chooser) -->
+            <div class="social-login-row single-social">
+              <div id="gsiSignUpBtnContainer" class="gsi-direct-btn-slot"></div>
+              <button class="google-auth-card social-btn" id="googleSignUpBtn" title="Continue with Google" style="display: none;">
+                <svg width="22" height="22" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <span class="google-btn-text">Continue with Google</span>
+              </button>
+            </div>
+
+            <div class="auth-switch-text">
+              Already have an account? <button type="button" class="auth-link-btn" id="linkToLogin">Sign in</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scrollable App Screen Content -->
+      <div class="screen-viewport">
+        <!-- ==================== TAB 1: NUTRITION ==================== -->
+        <section id="tabNutrition" class="screen-tab active">
+          <header class="tab-header">
+            <div>
+              <span class="date-chip">TODAY, SEPTEMBER 9</span>
+              <h1 class="screen-title">Daily Nutrition</h1>
+            </div>
+            <button class="icon-avatar-btn" id="headerProfileJump">
+              <span class="avatar-initials">FT</span>
+            </button>
+          </header>
+
+          <!-- Dynamic Calorie Goal & Macro Ring Banner -->
+          <div class="card macro-banner-card">
+            <div class="card-header-row">
+              <span class="card-title">Calorie Target</span>
+              <span class="status-pill" id="macroPercentBadge">0% Done</span>
+            </div>
+
+            <div class="ring-visual-wrap">
+              <svg class="ring-chart-svg" viewBox="0 0 200 200">
+                <!-- Background track -->
+                <circle cx="100" cy="100" r="82" class="ring-track" />
+                <!-- Protein Arc (#1D3F37) -->
+                <circle id="proteinRingArc" cx="100" cy="100" r="82" class="ring-segment arc-protein" />
+                <!-- Carbs Arc (#EE924F) -->
+                <circle id="carbsRingArc" cx="100" cy="100" r="82" class="ring-segment arc-carbs" />
+                <!-- Fats Arc (#E5A93B) -->
+                <circle id="fatsRingArc" cx="100" cy="100" r="82" class="ring-segment arc-fats" />
+              </svg>
+              <div class="ring-center-info">
+                <span class="ring-calories-val" id="consumedCaloriesText">0</span>
+                <span class="ring-calories-sub">of 2,300 kcal</span>
+                <span class="ring-calories-rem" id="remainingCaloriesText">2,300 kcal left</span>
+              </div>
+            </div>
+
+            <div class="macro-chips-row">
+              <div class="macro-chip">
+                <div class="chip-label"><span class="dot bg-carbs"></span>Carbs</div>
+                <div class="chip-val" id="carbsGramText">0g / 180g</div>
+              </div>
+              <div class="macro-chip">
+                <div class="chip-label"><span class="dot bg-protein"></span>Protein</div>
+                <div class="chip-val" id="proteinGramText">0g / 140g</div>
+              </div>
+              <div class="macro-chip">
+                <div class="chip-label"><span class="dot bg-fats"></span>Fats</div>
+                <div class="chip-val" id="fatsGramText">0g / 65g</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI NLP Natural Language Input Box ("Ask advice / Log meal") -->
+          <div class="ai-input-card">
+            <div class="ai-input-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6200EE" stroke-width="2">
+                <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/>
+              </svg>
+            </div>
+            <input type="text" id="aiMealInput" placeholder="Ask advice / Log meal (&quot;2 eggs and toast&quot;)" />
+            <button class="ai-submit-btn" id="aiSubmitBtn" title="Log Food with AI">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Quick Suggestions Chips -->
+          <div class="quick-chips-row">
+            <span class="suggestion-chip" data-meal="2 eggs and sourdough toast" data-cal="280" data-p="16" data-c="28" data-f="10">+ 2 eggs & toast</span>
+            <span class="suggestion-chip" data-meal="Whey protein shake with milk" data-cal="210" data-p="32" data-c="10" data-f="4">+ Protein shake</span>
+            <span class="suggestion-chip" data-meal="Greek yogurt with honey" data-cal="180" data-p="18" data-c="20" data-f="2">+ Greek yogurt</span>
+          </div>
+
+          <!-- Hydration Tracker Card (+250ml logger) -->
+          <div class="card water-card">
+            <div class="water-header">
+              <div class="water-title-wrap">
+                <div class="water-icon-circle">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="#3B82F6">
+                    <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                  </svg>
+                </div>
+                <div>
+                  <div class="card-title">Hydration Tracker</div>
+                  <div class="card-subtitle" id="waterStatusText">0 / 2,500 ml</div>
+                </div>
+              </div>
+              <button class="pill-btn-small" id="addWaterBtn">+250 ml</button>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill bg-water" id="waterProgressFill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <!-- Meal Log Sections -->
+          <div class="meal-group">
+            <div class="section-subheading">Today's Meal Logs</div>
+
+            <!-- Breakfast Card -->
+            <div class="card meal-card">
+              <div class="meal-card-top">
+                <div>
+                  <h3 class="meal-name">Breakfast</h3>
+                  <p class="meal-summary" id="breakfastSummary">0 of 650 kcal</p>
+                </div>
+                <button class="icon-add-btn open-scanner-trigger" title="Log Food">+</button>
+              </div>
+              <ul class="meal-item-list" id="breakfastItemList">
+                <li class="meal-empty-note">No breakfast logged yet today. Tap + to add food.</li>
+              </ul>
+            </div>
+
+            <!-- Lunch Card -->
+            <div class="card meal-card">
+              <div class="meal-card-top">
+                <div>
+                  <h3 class="meal-name">Lunch</h3>
+                  <p class="meal-summary" id="lunchSummary">0 of 750 kcal</p>
+                </div>
+                <button class="icon-add-btn open-scanner-trigger" title="Log Food">+</button>
+              </div>
+              <ul class="meal-item-list" id="lunchItemList">
+                <li class="meal-empty-note">No lunch logged yet today. Tap + to add food.</li>
+              </ul>
+            </div>
+
+            <!-- Dinner & Snacks -->
+            <div class="card meal-card">
+              <div class="meal-card-top">
+                <div>
+                  <h3 class="meal-name">Dinner</h3>
+                  <p class="meal-summary" id="dinnerSummary">Planned 650 kcal</p>
+                </div>
+                <button class="icon-add-btn open-scanner-trigger" title="Log Food">+</button>
+              </div>
+              <div class="meal-empty-note">Ready to log your dinner</div>
+            </div>
+
+            <!-- Snacks Card -->
+            <div class="card meal-card">
+              <div class="meal-card-top">
+                <div>
+                  <h3 class="meal-name">Snacks</h3>
+                  <p class="meal-summary" id="snackSummary">0 of 250 kcal</p>
+                </div>
+                <button class="icon-add-btn open-scanner-trigger" title="Log Food">+</button>
+              </div>
+              <ul class="meal-item-list" id="snackItemList">
+                <li class="meal-empty-note">No snacks logged yet today. Tap + to add food.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== TAB 2: WORKOUT ==================== -->
+        <section id="tabWorkout" class="screen-tab">
+          <header class="tab-header">
+            <div>
+              <span class="date-chip">TODAY'S FOCUS</span>
+              <h1 class="screen-title">Workout Tracker</h1>
+            </div>
+          </header>
+
+          <!-- Hero Focus Card (Lower Body • 20 min • 234 kcal) -->
+          <div class="card workout-hero-card">
+            <div class="card-header-row">
+              <span class="tag-pill-lime">RECOMMENDED ROUTINE</span>
+              <span class="timer-badge" id="activeTimerBadge" style="display: none;">
+                <span class="live-dot"></span><span id="activeTimerVal">00:00</span>
+              </span>
+            </div>
+
+            <h2 class="workout-hero-title">Lower Body Strength</h2>
+
+            <!-- Focus Specs: Lower Body • 20 min • 234 kcal -->
+            <div class="workout-specs-row">
+              <div class="spec-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span>20 min</span>
+              </div>
+              <div class="spec-item accent-fire">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EE924F" stroke-width="2">
+                  <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+                </svg>
+                <span>234 kcal</span>
+              </div>
+              <div class="spec-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D3F37" stroke-width="2">
+                  <path d="m6.5 6.5 11 11M21 21l-3-3M3 3l3 3M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7"/>
+                </svg>
+                <span>4 exercises</span>
+              </div>
+            </div>
+
+            <!-- Start Workout Dark Pill CTA (#1A1A1A) -->
+            <button class="dark-pill-cta" id="startWorkoutBtn">Start Workout</button>
+          </div>
+
+          <!-- Exercise Checklist Section -->
+          <div class="section-subheading-row">
+            <span class="section-subheading">Exercise Checklist</span>
+            <span class="completion-count" id="checklistCount">1 of 4 Completed</span>
+          </div>
+
+          <div class="exercise-checklist">
+            <!-- Exercise 1: Squats 3x12 -->
+            <div class="card exercise-item-card" data-id="squats">
+              <div class="exercise-card-header">
+                <button class="checkbox-circle checked" id="checkSquats">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <div class="exercise-info">
+                  <h3 class="exercise-title">Barbell Back Squats</h3>
+                  <p class="exercise-meta">3 sets × 12 reps • 65 kg</p>
+                </div>
+              </div>
+              <div class="sets-bubble-row">
+                <span class="set-bubble done" data-set="1">Set 1: 12 reps</span>
+                <span class="set-bubble done" data-set="2">Set 2: 12 reps</span>
+                <span class="set-bubble done" data-set="3">Set 3: 12 reps</span>
+              </div>
+            </div>
+
+            <!-- Exercise 2: Lunges 4x20 -->
+            <div class="card exercise-item-card" data-id="lunges">
+              <div class="exercise-card-header">
+                <button class="checkbox-circle" id="checkLunges">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <div class="exercise-info">
+                  <h3 class="exercise-title">Walking Dumbbell Lunges</h3>
+                  <p class="exercise-meta">4 sets × 20 reps • 14 kg dumbbells</p>
+                </div>
+              </div>
+              <div class="sets-bubble-row">
+                <span class="set-bubble active" data-set="1">Set 1: 20 reps</span>
+                <span class="set-bubble" data-set="2">Set 2: 20 reps</span>
+                <span class="set-bubble" data-set="3">Set 3: 20 reps</span>
+                <span class="set-bubble" data-set="4">Set 4: 20 reps</span>
+              </div>
+            </div>
+
+            <!-- Exercise 3: Romanian Deadlifts 3x10 -->
+            <div class="card exercise-item-card" data-id="rdl">
+              <div class="exercise-card-header">
+                <button class="checkbox-circle" id="checkRdl">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <div class="exercise-info">
+                  <h3 class="exercise-title">Romanian Deadlifts</h3>
+                  <p class="exercise-meta">3 sets × 10 reps • 70 kg</p>
+                </div>
+              </div>
+              <div class="sets-bubble-row">
+                <span class="set-bubble" data-set="1">Set 1: 10 reps</span>
+                <span class="set-bubble" data-set="2">Set 2: 10 reps</span>
+                <span class="set-bubble" data-set="3">Set 3: 10 reps</span>
+              </div>
+            </div>
+
+            <!-- Exercise 4: Calf Raises -->
+            <div class="card exercise-item-card" data-id="calves">
+              <div class="exercise-card-header">
+                <button class="checkbox-circle" id="checkCalves">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <div class="exercise-info">
+                  <h3 class="exercise-title">Calf Raises & Glute Bridges</h3>
+                  <p class="exercise-meta">3 sets × 15 reps • Bodyweight</p>
+                </div>
+              </div>
+              <div class="sets-bubble-row">
+                <span class="set-bubble" data-set="1">Set 1: 15 reps</span>
+                <span class="set-bubble" data-set="2">Set 2: 15 reps</span>
+                <span class="set-bubble" data-set="3">Set 3: 15 reps</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== TAB 3: OVERVIEW ==================== -->
+        <section id="tabOverview" class="screen-tab">
+          <header class="tab-header">
+            <div>
+              <span class="date-chip">TODAY, SEPTEMBER 9</span>
+              <h1 class="screen-title">Overview</h1>
+            </div>
+          </header>
+
+          <!-- Period Segmented Switcher (Today vs This Week) -->
+          <div class="overview-period-switcher">
+            <button class="period-tab active" id="overviewPeriodToday" data-period="today">Today</button>
+            <button class="period-tab" id="overviewPeriodWeek" data-period="week">This Week</button>
+          </div>
+
+          <!-- Energy Balance Comparison Card -->
+          <div class="card energy-balance-card">
+            <div class="card-header-row">
+              <span class="card-title">Daily Energy Balance</span>
+              <span class="status-pill" id="energyBalanceNet">+780 kcal Net</span>
+            </div>
+            <div class="balance-stats-row">
+              <div>
+                <span class="stat-lbl">Consumed</span>
+                <span class="stat-val text-carbs" id="overviewConsumed">1,320 kcal</span>
+              </div>
+              <div class="align-right">
+                <span class="stat-lbl">Active Burned</span>
+                <span class="stat-val text-protein" id="overviewBurned">540 kcal</span>
+              </div>
+            </div>
+            <div class="ratio-progress-bar">
+              <div class="ratio-segment bg-carbs" id="balanceRatioConsumed" style="width: 71%;"></div>
+              <div class="ratio-segment bg-protein" id="balanceRatioBurned" style="width: 29%;"></div>
+            </div>
+          </div>
+
+          <!-- THE ROUNDED 2X2 GRID (TODAY'S DATA BY DEFAULT) -->
+          <div class="section-subheading" id="metricsGridHeading">Today's Health Metrics</div>
+          <div class="metric-grid-2x2">
+            <!-- Metric 1: Calories Burned -->
+            <div class="card metric-card">
+              <div class="metric-card-top">
+                <div class="metric-icon-circle bg-carbs-light">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#EE924F">
+                    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+                  </svg>
+                </div>
+                <span class="metric-dot bg-carbs"></span>
+              </div>
+              <div class="metric-card-bottom">
+                <div class="metric-number" id="metricCaloriesVal">2,180</div>
+                <div class="metric-name" id="metricCaloriesTitle">Calories Burned</div>
+                <div class="metric-sub" id="metricCaloriesSub">540 active • 1,640 resting</div>
+              </div>
+            </div>
+
+            <!-- Metric 2: Step Counter -->
+            <div class="card metric-card">
+              <div class="metric-card-top">
+                <div class="metric-icon-circle bg-steps-light">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#1A1A1A">
+                    <path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/>
+                  </svg>
+                </div>
+                <span class="metric-dot bg-steps"></span>
+              </div>
+              <div class="metric-card-bottom">
+                <div class="metric-number" id="metricStepsVal">8,420</div>
+                <div class="metric-name" id="metricStepsTitle">Step Counter</div>
+                <div class="metric-sub" id="metricStepsSub">steps (84% of 10k goal)</div>
+              </div>
+            </div>
+
+            <!-- Metric 3: Active Minutes -->
+            <div class="card metric-card">
+              <div class="metric-card-top">
+                <div class="metric-icon-circle bg-protein-light">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#1D3F37">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
+                    <polyline points="12 6 12 12 16 14" stroke="currentColor" stroke-width="2"/>
+                  </svg>
+                </div>
+                <span class="metric-dot bg-protein"></span>
+              </div>
+              <div class="metric-card-bottom">
+                <div class="metric-number" id="metricActiveMinsVal">48</div>
+                <div class="metric-name" id="metricActiveMinsTitle">Active Minutes</div>
+                <div class="metric-sub" id="metricActiveMinsSub">min (Goal 45 min reached)</div>
+              </div>
+            </div>
+
+            <!-- Metric 4: Sleep Tracker -->
+            <div class="card metric-card">
+              <div class="metric-card-top">
+                <div class="metric-icon-circle bg-sleep-light">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#8B6B56">
+                    <path d="M12.3 2a10 10 0 0 0-.3 20 10 10 0 0 0 10-9.7 7.5 7.5 0 0 1-9.7-10.3z"/>
+                  </svg>
+                </div>
+                <span class="metric-dot bg-sleep"></span>
+              </div>
+              <div class="metric-card-bottom">
+                <div class="metric-number" id="metricSleepVal">7h 35m</div>
+                <div class="metric-name" id="metricSleepTitle">Sleep Duration</div>
+                <div class="metric-sub" id="metricSleepSub">Last night • 92% score</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Weekly Expenditure Histogram -->
+          <div class="card chart-card">
+            <div class="card-title">Daily Calorie Burn Trend</div>
+            <div class="histogram-bars">
+              <div class="bar-col">
+                <div class="bar-fill" style="height: 65%;"></div>
+                <span class="bar-day">M</span>
+              </div>
+              <div class="bar-col">
+                <div class="bar-fill" style="height: 80%;"></div>
+                <span class="bar-day">T</span>
+              </div>
+              <div class="bar-col">
+                <div class="bar-fill" style="height: 60%;"></div>
+                <span class="bar-day">W</span>
+              </div>
+              <div class="bar-col peak">
+                <div class="bar-fill" style="height: 95%;"></div>
+                <span class="bar-day">T</span>
+              </div>
+              <div class="bar-col">
+                <div class="bar-fill" style="height: 75%;"></div>
+                <span class="bar-day">F</span>
+              </div>
+              <div class="bar-col">
+                <div class="bar-fill" style="height: 85%;"></div>
+                <span class="bar-day">S</span>
+              </div>
+              <div class="bar-col">
+                <div class="bar-fill" style="height: 50%;"></div>
+                <span class="bar-day">S</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== TAB 4: PROFILE & SETTINGS ==================== -->
+        <section id="tabProfile" class="screen-tab">
+          <header class="tab-header">
+            <div>
+              <span class="date-chip">ACCOUNT & PREFERENCES</span>
+              <h1 class="screen-title">Profile</h1>
+            </div>
+          </header>
+
+          <!-- User Card -->
+          <div class="card user-profile-card">
+            <div class="user-avatar-large" id="profileUserAvatar">AR</div>
+            <div class="user-meta-wrap" style="flex: 1; min-width: 0;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                <div style="min-width: 0;">
+                  <h2 class="user-display-name" id="profileUserName">Alex Rivera</h2>
+                  <p class="user-email" id="profileUserEmail">alex.rivera@wellness.io</p>
+                </div>
+                <button class="edit-profile-action-btn" id="editProfileBtn" title="Edit Personal Data">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  <span>Edit</span>
+                </button>
+              </div>
+              <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+                <span class="tag-pill-lime">PRO SUBSCRIBER</span>
+                <span class="status-pill" id="profileActivityBadge" style="background:#EBF3FE; color:#1E2A78; font-weight:700;">Gym: 4-5 days/wk</span>
+                <span class="status-pill goal-pill" id="profileGoalBadge" style="background:#FEF3F2; color:#B42318; font-weight:700;">Goal: Maintain</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Physical Parameters (BMI Calculator) -->
+          <div class="card params-card">
+            <div class="card-header-row" style="display:flex; justify-content:space-between; align-items:center;">
+              <div class="card-title">Physical Parameters</div>
+              <button class="edit-params-action-btn" id="editParamsBtn" title="Edit Physical Metrics">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                <span>Edit</span>
+              </button>
+            </div>
+            <div class="params-row" style="grid-template-columns: repeat(4, 1fr);">
+              <div class="param-box">
+                <span class="param-lbl">Age</span>
+                <span class="param-val" id="profileAgeVal">25 <small>yrs</small></span>
+              </div>
+              <div class="param-box">
+                <span class="param-lbl">Weight</span>
+                <span class="param-val" id="profileWeightVal">68.5 <small>kg</small></span>
+              </div>
+              <div class="param-box">
+                <span class="param-lbl">Height</span>
+                <span class="param-val" id="profileHeightVal">175 <small>cm</small></span>
+              </div>
+              <div class="param-box">
+                <span class="param-lbl">BMI Score</span>
+                <span class="param-val" id="profileBmiVal">22.4</span>
+                <span class="bmi-badge" id="profileBmiBadge">Normal</span>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="target-slider-wrap">
+              <div class="slider-header">
+                <div>
+                  <div class="card-title-sm">Daily Calorie Target</div>
+                  <div class="card-subtitle" id="profileCalorieSubtitle">Recommended for lean muscle maintenance</div>
+                </div>
+                <span class="target-badge" id="sliderValDisplay">2,300 kcal</span>
+              </div>
+              <input type="range" id="targetSlider" min="1200" max="4500" step="1" value="2300" class="wellness-slider" />
+            </div>
+          </div>
+
+          <!-- Subscription & Payments Manager -->
+          <div class="card sub-card">
+            <div class="card-header-row">
+              <span class="card-title">Subscription & Billing</span>
+              <span class="verified-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#10B981">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+              </span>
+            </div>
+            <h3 class="plan-name">FitTrack Pro (Annual)</h3>
+            <p class="plan-details">Active • Renews Nov 2026 • Managed via Google Play Billing / Stripe</p>
+          </div>
+
+          <!-- Connected Integrations -->
+          <div class="card integrations-card">
+            <div class="card-title">Connected Health Sensors</div>
+
+            <div class="integration-item">
+              <div class="integration-left">
+                <div class="sensor-icon bg-heart">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="#E53935">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                </div>
+                <div>
+                  <div class="integration-name">Google Health Connect SDK</div>
+                  <div class="integration-sub">Automatic steps, heart rate & sleep sync</div>
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked />
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+
+            <div class="integration-item">
+              <div class="integration-left">
+                <div class="sensor-icon bg-strava">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="#EE924F">
+                    <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7.925 15.545h4.173"/>
+                  </svg>
+                </div>
+                <div>
+                  <div class="integration-name">Strava GPS & Workouts</div>
+                  <div class="integration-sub">Auto MET calories & activity import</div>
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked />
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Account Actions & Logout -->
+          <div class="card account-actions-card">
+            <button class="logout-btn" id="logoutBtn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              <span>Log Out &amp; Return to Intro</span>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ==================== CUSTOM 5-TAB BOTTOM NAVIGATION ==================== -->
+      <nav class="bottom-nav-bar">
+        <!-- Tab 1: Nutrition -->
+        <button class="nav-item active" data-tab="tabNutrition">
+          <div class="nav-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>
+            </svg>
+          </div>
+          <span class="nav-label">Nutrition</span>
+        </button>
+
+        <!-- Tab 2: Workout -->
+        <button class="nav-item" data-tab="tabWorkout">
+          <div class="nav-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/>
+            </svg>
+          </div>
+          <span class="nav-label">Workout</span>
+        </button>
+
+        <!-- CENTER FLOATING SCANNER ACTION BUTTON (#6200EE) -->
+        <button class="nav-center-scan-btn" id="centerScanBtn" title="Scan Barcode & Food">
+          <div class="scan-pulse-ring"></div>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="#FFFFFF">
+            <path d="M4 4h4V2H4C2.9 2 2 2.9 2 4v4h2V4zm16-2h-4v2h4v4h2V4c0-1.1-.9-2-2-2zm0 18h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4zM4 16H2v4c0 1.1.9 2 2 2h4v-2H4v-4zm5-9h6v2H9V7zm0 4h6v2H9v-2zm0 4h6v2H9v-2z"/>
+          </svg>
+        </button>
+
+        <!-- Tab 3: Overview -->
+        <button class="nav-item" data-tab="tabOverview">
+          <div class="nav-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+            </svg>
+          </div>
+          <span class="nav-label">Overview</span>
+        </button>
+
+        <!-- Tab 4: Profile -->
+        <button class="nav-item" data-tab="tabProfile">
+          <div class="nav-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+          </div>
+          <span class="nav-label">Profile</span>
+        </button>
+      </nav>
+
+      <!-- Toast Notice -->
+      <div class="toast-notice" id="authToastNotice">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34A853" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="authToastText">Signed in with Google</span>
+      </div>
+
+      <!-- Intermediate modal removed: Direct 1-click Google authentication enabled -->
+
+      <!-- ==================== GOOGLE CLOUD CONSOLE SETUP MODAL ==================== -->
+      <div class="google-modal-backdrop" id="googleConfigModalBackdrop">
+        <div class="google-modal-sheet google-config-sheet">
+          <div class="google-modal-header">
+            <div class="google-modal-brand">
+              <svg width="22" height="22" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+              </svg>
+              <span class="google-modal-title">Google Cloud OAuth Setup</span>
+            </div>
+            <button class="google-modal-close" id="closeGoogleConfigModalBtn" title="Close">✕</button>
+          </div>
+
+          <div class="google-modal-sub">Set up your official Google Cloud OAuth 2.0 Client ID for publishing FitTrack on the Web and Google Play Store.</div>
+
+          <div class="google-steps-container">
+            <div class="google-step-item">
+              <span class="step-num">1</span>
+              <div class="step-content">
+                <strong>Google Cloud Console Credentials</strong>
+                <p>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console.cloud.google.com/apis/credentials</a> and select or create your project.</p>
+              </div>
+            </div>
+
+            <div class="google-step-item">
+              <span class="step-num">2</span>
+              <div class="step-content">
+                <strong>OAuth Consent Screen</strong>
+                <p>Set User Type to <strong>External</strong>, App name to <strong>FitTrack</strong>, and add email/profile scopes.</p>
+              </div>
+            </div>
+
+            <div class="google-step-item">
+              <span class="step-num">3</span>
+              <div class="step-content">
+                <strong>Create OAuth Client ID</strong>
+                <p>Select <strong>Web application</strong>. Under <em>Authorized JavaScript origins</em>, add:</p>
+                <div class="origin-copy-box"><code>http://localhost:8080</code></div>
+              </div>
+            </div>
+
+            <div class="google-step-item">
+              <span class="step-num">4</span>
+              <div class="step-content">
+                <strong>For Android Publication (Play Store)</strong>
+                <p>Create another Client ID &gt; <strong>Android</strong> with package <code>com.fittrack.app</code> and your SHA-1 certificate fingerprint.</p>
+              </div>
+            </div>
+          </div>
+
+          <form id="googleConfigForm" onsubmit="return false;" style="margin-top: 14px;">
+            <div class="auth-section-label">Your Google OAuth Web Client ID</div>
+            <div class="auth-input-card">
+              <input type="text" id="googleClientIdField" placeholder="e.g. 596130829554-xxx.apps.googleusercontent.com" required />
+            </div>
+
+            <div class="auth-error-alert" id="googleConfigAlert" style="display: none;"></div>
+
+            <button type="button" class="auth-primary-btn" id="saveGoogleClientIdBtn">Save &amp; Connect Google OAuth</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- ==================== GOOGLE PROFILE SETUP POPUP MODAL ==================== -->
+      <div class="google-modal-backdrop" id="googleProfileModalBackdrop">
+        <div class="google-modal-sheet google-profile-sheet">
+          <div class="google-modal-header">
+            <div class="google-modal-brand">
+              <svg width="22" height="22" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              <span class="google-modal-title">Complete Your Profile</span>
+            </div>
+            <button class="google-modal-close" id="closeGoogleProfileModalBtn" title="Back">✕</button>
+          </div>
+
+          <div class="google-modal-sub">Personalize your physical metrics for accurate calorie tracking and workout goals.</div>
+
+          <!-- Verified Google User Card -->
+          <div class="google-verified-card">
+            <div class="google-avatar bg-avatar-indigo" id="googleProfileAvatarBadge">G</div>
+            <div class="google-verified-meta">
+              <div class="google-verified-name" id="googleProfileAccountName">Google User</div>
+              <div class="google-verified-email" id="googleProfileAccountEmail">user@gmail.com</div>
+            </div>
+            <span class="google-check-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+              Verified
+            </span>
+          </div>
+
+          <form id="googleProfileForm" onsubmit="return false;">
+            <!-- 1. Name input -->
+            <div class="auth-section-label" style="margin-top: 10px;">Full Name</div>
+            <div class="auth-input-card">
+              <input type="text" id="googleProfileInputName" placeholder="Full Name" required />
+            </div>
+
+            <!-- 2. Physical Metrics Row -->
+            <div class="auth-section-label">Physical Metrics</div>
+            <div class="auth-metrics-row">
+              <div class="auth-metric-card">
+                <span class="auth-metric-title">Age</span>
+                <div class="auth-metric-input-wrap">
+                  <input type="number" id="googleProfileInputAge" placeholder="e.g. 24" value="" min="12" max="100" required />
+                  <span class="auth-metric-unit">yrs</span>
+                </div>
+              </div>
+
+              <div class="auth-metric-card">
+                <span class="auth-metric-title">Weight</span>
+                <div class="auth-metric-input-wrap">
+                  <input type="number" id="googleProfileInputWeight" placeholder="e.g. 70" value="" step="0.5" min="30" max="300" required />
+                  <span class="auth-metric-unit">kg</span>
+                </div>
+              </div>
+
+              <div class="auth-metric-card">
+                <span class="auth-metric-title">Height</span>
+                <div class="auth-metric-input-wrap">
+                  <input type="number" id="googleProfileInputHeight" placeholder="e.g. 175" value="" min="100" max="250" required />
+                  <span class="auth-metric-unit">cm</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Gym / Physical Activity Frequency -->
+            <div class="auth-section-label">Gym &amp; Workout Frequency</div>
+            <div class="auth-activity-card">
+              <div class="activity-chips-grid">
+                <button type="button" class="activity-chip google-activity-chip" data-days="0-1">
+                  <span class="chip-days">0-1 days</span>
+                  <span class="chip-desc">Light / Rest</span>
+                </button>
+                <button type="button" class="activity-chip google-activity-chip" data-days="2-3">
+                  <span class="chip-days">2-3 days</span>
+                  <span class="chip-desc">Moderate</span>
+                </button>
+                <button type="button" class="activity-chip google-activity-chip" data-days="4-5">
+                  <span class="chip-days">4-5 days</span>
+                  <span class="chip-desc">Gym Active</span>
+                </button>
+                <button type="button" class="activity-chip google-activity-chip" data-days="6-7">
+                  <span class="chip-days">6-7 days</span>
+                  <span class="chip-desc">Athlete</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 4. Fitness Goal -->
+            <div class="auth-section-label">Fitness Goal</div>
+            <div class="auth-activity-card">
+              <div class="goal-chips-grid">
+                <button type="button" class="goal-chip google-goal-chip" data-goal="weight_loss">
+                  <span class="chip-goal-icon">📉</span>
+                  <div class="chip-goal-meta">
+                    <span class="chip-goal-title">Weight Loss</span>
+                    <span class="chip-goal-sub">-500 kcal deficit</span>
+                  </div>
+                </button>
+                <button type="button" class="goal-chip google-goal-chip" data-goal="maintain">
+                  <span class="chip-goal-icon">⚖️</span>
+                  <div class="chip-goal-meta">
+                    <span class="chip-goal-title">Maintain</span>
+                    <span class="chip-goal-sub">Keep current weight</span>
+                  </div>
+                </button>
+                <button type="button" class="goal-chip google-goal-chip" data-goal="weight_gain">
+                  <span class="chip-goal-icon">📈</span>
+                  <div class="chip-goal-meta">
+                    <span class="chip-goal-title">Weight Gain</span>
+                    <span class="chip-goal-sub">+500 kcal surplus</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div class="auth-error-alert" id="googleProfileErrorAlert" style="display: none; margin-top: 10px;"></div>
+
+            <button type="button" class="auth-primary-btn" id="googleProfileSubmitBtn" style="margin-top: 14px;">Save Profile &amp; Enter FitTrack</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- ==================== EDIT PERSONAL DATA MODAL ==================== -->
+      <div class="google-modal-backdrop" id="editPersonalDataModalBackdrop">
+        <div class="google-modal-sheet edit-profile-sheet">
+          <div class="google-modal-header">
+            <div class="google-modal-brand">
+              <div class="edit-modal-icon-badge">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#253494" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </div>
+              <span class="google-modal-title">Edit Personal Data</span>
+            </div>
+            <button class="google-modal-close" id="closeEditProfileModalBtn" title="Close">✕</button>
+          </div>
+
+          <div class="google-modal-sub">Update your personal metrics and workout frequency. Calorie target and BMI are recomputed instantly.</div>
+
+          <form id="editProfileForm" onsubmit="return false;">
+            <!-- 1. Full Name -->
+            <div class="auth-section-label" style="margin-top: 10px;">Full Name</div>
+            <div class="auth-input-card">
+              <input type="text" id="editProfileInputName" placeholder="Full Name" required />
+            </div>
+
+            <!-- 2. Physical Metrics Row -->
+            <div class="auth-section-label">Physical Metrics</div>
+            <div class="auth-metrics-row">
+              <div class="auth-metric-card">
+                <span class="auth-metric-title">Age</span>
+                <div class="auth-metric-input-wrap">
+                  <input type="number" id="editProfileInputAge" placeholder="25" min="12" max="100" required />
+                  <span class="auth-metric-unit">yrs</span>
+                </div>
+              </div>
+
+              <div class="auth-metric-card">
+                <span class="auth-metric-title">Weight</span>
+                <div class="auth-metric-input-wrap">
+                  <input type="number" id="editProfileInputWeight" placeholder="68.5" step="0.1" min="30" max="300" required />
+                  <span class="auth-metric-unit">kg</span>
+                </div>
+              </div>
+
+              <div class="auth-metric-card">
+                <span class="auth-metric-title">Height</span>
+                <div class="auth-metric-input-wrap">
+                  <input type="number" id="editProfileInputHeight" placeholder="175" min="100" max="250" required />
+                  <span class="auth-metric-unit">cm</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Gym / Physical Activity Frequency -->
+            <div class="auth-section-label">Gym &amp; Workout Frequency</div>
+            <div class="auth-activity-card">
+              <div class="activity-chips-grid">
+                <button type="button" class="activity-chip edit-activity-chip" data-days="0-1">
+                  <span class="chip-days">0-1 days</span>
+                  <span class="chip-desc">Light / Rest</span>
+                </button>
+                <button type="button" class="activity-chip edit-activity-chip" data-days="2-3">
+                  <span class="chip-days">2-3 days</span>
+                  <span class="chip-desc">Moderate</span>
+                </button>
+                <button type="button" class="activity-chip edit-activity-chip" data-days="4-5">
+                  <span class="chip-days">4-5 days</span>
+                  <span class="chip-desc">Gym Active</span>
+                </button>
+                <button type="button" class="activity-chip edit-activity-chip" data-days="6-7">
+                  <span class="chip-days">6-7 days</span>
+                  <span class="chip-desc">Athlete</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 4. Fitness Goal (Weight Loss / Maintain / Weight Gain) -->
+            <div class="auth-section-label">Fitness Goal</div>
+            <div class="auth-activity-card">
+              <div class="goal-chips-grid">
+                <button type="button" class="goal-chip edit-goal-chip" data-goal="weight_loss">
+                  <span class="chip-goal-icon">📉</span>
+                  <div class="chip-goal-meta">
+                    <span class="chip-goal-title">Weight Loss</span>
+                    <span class="chip-goal-sub">-500 kcal deficit</span>
+                  </div>
+                </button>
+                <button type="button" class="goal-chip edit-goal-chip" data-goal="maintain">
+                  <span class="chip-goal-icon">⚖️</span>
+                  <div class="chip-goal-meta">
+                    <span class="chip-goal-title">Maintain</span>
+                    <span class="chip-goal-sub">Keep current weight</span>
+                  </div>
+                </button>
+                <button type="button" class="goal-chip edit-goal-chip" data-goal="weight_gain">
+                  <span class="chip-goal-icon">📈</span>
+                  <div class="chip-goal-meta">
+                    <span class="chip-goal-title">Weight Gain</span>
+                    <span class="chip-goal-sub">+500 kcal surplus</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <!-- 5. Real-time Live Calculation Preview -->
+            <div class="edit-live-preview-card">
+              <div class="preview-metric-item">
+                <span class="preview-lbl">Calculated BMI</span>
+                <div class="preview-val-row">
+                  <span class="preview-num" id="editLiveBmi">22.4</span>
+                  <span class="bmi-badge" id="editLiveBmiBadge" style="margin-left: 6px;">Normal</span>
+                </div>
+              </div>
+              <div class="preview-divider-vert"></div>
+              <div class="preview-metric-item">
+                <span class="preview-lbl" id="editLiveGoalTag">Est. Calorie Target</span>
+                <div class="preview-val-row">
+                  <span class="preview-num highlight" id="editLiveCalories">2,571</span>
+                  <span class="preview-unit">kcal/day</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="auth-error-alert" id="editProfileErrorAlert" style="display: none; margin-top: 10px;"></div>
+
+            <div class="edit-modal-actions-row">
+              <button type="button" class="btn-cancel-flat" id="cancelEditProfileBtn">Cancel</button>
+              <button type="button" class="auth-primary-btn flex-1" id="saveEditProfileBtn">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ==================== SCAN BOTTOM SHEET MODAL ==================== -->
+      <div class="bottom-sheet-backdrop" id="scanModalBackdrop">
+        <div class="bottom-sheet-dialog" id="scanModalDialog">
+          <div class="sheet-drag-handle"></div>
+
+          <div class="sheet-header">
+            <div>
+              <h2 class="sheet-title">Universal Quick Scanner</h2>
+              <p class="sheet-sub">Barcode Reader & AI Vision Scanner</p>
+            </div>
+            <button class="sheet-close-btn" id="closeScanModal">✕</button>
+          </div>
+
+          <!-- 3-Way Mode Segmented Switcher -->
+          <div class="scan-mode-tabs">
+            <button class="mode-tab active" data-mode="camera" id="tabBtnCamera">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              AI Camera
+            </button>
+            <button class="mode-tab" data-mode="search" id="tabBtnSearch">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              Item &amp; Qty
+            </button>
+            <button class="mode-tab" data-mode="manual" id="tabBtnManual">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Manual
+            </button>
+          </div>
+
+          <!-- ================= MODE 1: AI CAMERA ================= -->
+          <div class="modal-mode-panel active" id="panelCamera">
+            <div class="viewfinder-box" id="viewfinderArea">
+              <div class="viewfinder-grid">
+                <div class="corner tl"></div>
+                <div class="corner tr"></div>
+                <div class="corner bl"></div>
+                <div class="corner br"></div>
+                <div class="laser-scanner-line"></div>
+                <div class="viewfinder-icon-hint">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.5">
+                    <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+                    <circle cx="12" cy="12" r="3.5"/>
+                  </svg>
+                  <span>AI Camera Food &amp; Dish Scanner</span>
+                </div>
+              </div>
+
+              <!-- Viewfinder Camera Simulator Controls -->
+              <div class="viewfinder-toolbar">
+                <button class="viewfinder-action" id="torchToggle">Flash: Off</button>
+                <button class="simulate-detection-btn" id="simulateScanBtn">Simulate Capture (Salad Bowl)</button>
+              </div>
+            </div>
+
+            <!-- Detected Result Preview Card -->
+            <div class="detected-food-card" id="detectedFoodCard" style="display: none;">
+              <div class="detected-top">
+                <div>
+                  <h4 class="detected-title" id="detectedTitle">Mediterranean Salad Bowl</h4>
+                  <p class="detected-sub" id="detectedBrand">AI Vision Recognized • 280g serving</p>
+                </div>
+                <span class="detected-cal" id="detectedCalories">340 kcal</span>
+              </div>
+              <div class="detected-macros-row" id="detectedMacros">
+                <span>Protein: 18g</span> • <span>Carbs: 26g</span> • <span>Fat: 14g</span> • <span>Fiber: 6g</span>
+              </div>
+              <button class="dark-pill-cta" id="confirmLogScannedBtn">Add to Meal Log</button>
+            </div>
+          </div>
+
+          <!-- ================= MODE 2: SEARCH ITEM & QUANTITY ================= -->
+          <div class="modal-mode-panel" id="panelSearch" style="display: none;">
+            <div class="form-container-card">
+              <div class="input-group">
+                <label class="form-label" for="searchItemName">Food Item Name</label>
+                <div class="input-with-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  <input type="text" id="searchItemName" class="form-input" placeholder="e.g. Chicken Breast, Oats, Rice..." value="Chicken Breast" />
+                </div>
+              </div>
+
+              <div class="quantity-row">
+                <div class="input-group flex-1">
+                  <label class="form-label" for="searchQuantity">Quantity / Amount</label>
+                  <input type="number" id="searchQuantity" class="form-input" placeholder="e.g. 150" value="150" min="1" />
+                </div>
+                <div class="input-group width-auto">
+                  <label class="form-label" for="searchUnit">Unit</label>
+                  <select id="searchUnit" class="form-select">
+                    <option value="g">grams (g)</option>
+                    <option value="pcs">pieces / items</option>
+                    <option value="cup">cups</option>
+                    <option value="tbsp">tablespoons</option>
+                    <option value="oz">ounces (oz)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Fast Quick Selection Chips -->
+              <div class="quick-food-chips">
+                <span class="food-tag-chip active" data-name="Chicken Breast" data-unit="g" data-qty="150" data-cal="247" data-p="46" data-c="0" data-f="5" data-fib="0">Chicken Breast (150g)</span>
+                <span class="food-tag-chip" data-name="Rolled Oats" data-unit="g" data-qty="50" data-cal="190" data-p="7" data-c="34" data-f="3" data-fib="5">Oats (50g)</span>
+                <span class="food-tag-chip" data-name="Banana" data-unit="pcs" data-qty="1" data-cal="105" data-p="1.3" data-c="27" data-f="0.3" data-fib="3.1">Banana (1 pc)</span>
+                <span class="food-tag-chip" data-name="Boiled Eggs" data-unit="pcs" data-qty="2" data-cal="140" data-p="12" data-c="1" data-f="10" data-fib="0">2 Boiled Eggs</span>
+                <span class="food-tag-chip" data-name="Brown Rice" data-unit="g" data-qty="150" data-cal="166" data-p="3.8" data-c="35" data-f="1.4" data-fib="2.4">Brown Rice (150g)</span>
+              </div>
+
+              <!-- Nutrient Calculation Live Preview -->
+              <div class="search-result-preview" id="searchResultPreview">
+                <div class="preview-header">
+                  <div>
+                    <h4 class="preview-title" id="previewFoodTitle">Chicken Breast</h4>
+                    <p class="preview-sub" id="previewFoodQty">150g portion calculated</p>
+                  </div>
+                  <span class="preview-cal" id="previewFoodCal">247 kcal</span>
+                </div>
+                <div class="nutrient-grid-mini">
+                  <div class="nutri-pill"><span class="lbl">Protein</span><span class="val" id="prevP">46g</span></div>
+                  <div class="nutri-pill"><span class="lbl">Carbs</span><span class="val" id="prevC">0g</span></div>
+                  <div class="nutri-pill"><span class="lbl">Fat</span><span class="val" id="prevF">5g</span></div>
+                  <div class="nutri-pill"><span class="lbl">Fiber</span><span class="val" id="prevFib">0g</span></div>
+                </div>
+              </div>
+
+              <button class="dark-pill-cta" id="confirmLogSearchBtn">Add to Meal Log</button>
+            </div>
+          </div>
+
+          <!-- ================= MODE 3: MANUAL NUTRIENT ENTRY ================= -->
+          <div class="modal-mode-panel" id="panelManual" style="display: none;">
+            <div class="form-container-card">
+              <div class="input-group">
+                <label class="form-label" for="manualItemName">Food Item Name *</label>
+                <input type="text" id="manualItemName" class="form-input" placeholder="e.g. Protein Oatmeal Bowl" value="Homemade Protein Bowl" />
+              </div>
+
+              <div class="manual-grid-2x2">
+                <div class="input-group">
+                  <label class="form-label" for="manualCalories">Calories (kcal) *</label>
+                  <input type="number" id="manualCalories" class="form-input" placeholder="e.g. 380" value="380" min="0" />
+                </div>
+                <div class="input-group">
+                  <label class="form-label" for="manualProtein">Protein (g) *</label>
+                  <input type="number" id="manualProtein" class="form-input" placeholder="e.g. 30" value="30" min="0" step="0.5" />
+                </div>
+                <div class="input-group">
+                  <label class="form-label" for="manualCarbs">Carbs (g) *</label>
+                  <input type="number" id="manualCarbs" class="form-input" placeholder="e.g. 45" value="45" min="0" step="0.5" />
+                </div>
+                <div class="input-group">
+                  <label class="form-label" for="manualFat">Fat (g) *</label>
+                  <input type="number" id="manualFat" class="form-input" placeholder="e.g. 9" value="9" min="0" step="0.5" />
+                </div>
+                <div class="input-group full-width">
+                  <label class="form-label" for="manualFiber">Fiber (g) *</label>
+                  <input type="number" id="manualFiber" class="form-input" placeholder="e.g. 7" value="7" min="0" step="0.5" />
+                </div>
+              </div>
+
+              <button class="dark-pill-cta" id="confirmLogManualBtn">Add to Meal Log</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js?v=meal_breakdown_v1"></script>
+</body>
+</html>

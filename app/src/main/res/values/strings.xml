@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">FitTrack</string>
+    <string name="tab_nutrition">Nutrition</string>
+    <string name="tab_workout">Workout</string>
+    <string name="tab_scan">Scan</string>
+    <string name="tab_overview">Overview</string>
+    <string name="tab_profile">Profile</string>
+    <string name="calorie_goal_title">Daily Calorie Goal</string>
+    <string name="ask_ai_placeholder">Ask advice / Log meal (e.g., 2 eggs and toast)</string>
+    <string name="start_workout">Start Workout</string>
+    <string name="google_web_client_id">596130829554-dgiorsc23e95b0n7a1avotg0i5s4lmkv.apps.googleusercontent.com</string>
+</resources>
