@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class NutritionUiState(
+    val currentDate: String = java.time.LocalDate.now().toString(),
+    val waterDate: String = java.time.LocalDate.now().toString(),
     val consumedCalories: Int = 0,
     val targetCalories: Int = 2300,
     val carbsGrams: Int = 0,
@@ -21,6 +23,7 @@ data class NutritionUiState(
     val waterTargetMl: Int = 2500,
     val queryInput: String = "",
     val isAiParsing: Boolean = false,
+    val favoriteItems: List<MealItem> = emptyList(),
     val breakfastItems: List<MealItem> = emptyList(),
     val lunchItems: List<MealItem> = emptyList(),
     val dinnerItems: List<MealItem> = emptyList(),
@@ -34,17 +37,36 @@ class NutritionViewModel @Inject constructor() : ViewModel() {
     val uiState: StateFlow<NutritionUiState> = _uiState.asStateFlow()
 
     fun resetToZero() {
+        val today = java.time.LocalDate.now().toString()
         _uiState.update {
             NutritionUiState(
+                currentDate = today,
+                waterDate = today,
                 targetCalories = it.targetCalories,
                 waterTargetMl = it.waterTargetMl
             )
         }
     }
 
+    fun checkDayRollover() {
+        val today = java.time.LocalDate.now().toString()
+        if (_uiState.value.waterDate != today) {
+            _uiState.update {
+                it.copy(
+                    currentDate = today,
+                    waterDate = today,
+                    waterIntakeMl = 0
+                )
+            }
+        }
+    }
+
     fun loadDemoData() {
+        val today = java.time.LocalDate.now().toString()
         _uiState.update {
             it.copy(
+                currentDate = today,
+                waterDate = today,
                 consumedCalories = 1320,
                 targetCalories = 2300,
                 carbsGrams = 142,
@@ -74,8 +96,29 @@ class NutritionViewModel @Inject constructor() : ViewModel() {
     }
 
     fun addWater(amountMl: Int) {
+        checkDayRollover()
+        val today = java.time.LocalDate.now().toString()
         _uiState.update {
-            it.copy(waterIntakeMl = (it.waterIntakeMl + amountMl).coerceAtLeast(0))
+            it.copy(
+                waterDate = today,
+                waterIntakeMl = (it.waterIntakeMl + amountMl).coerceAtLeast(0)
+            )
+        }
+    }
+
+    fun addFavoriteMeal(item: MealItem) {
+        _uiState.update {
+            if (it.favoriteItems.any { fav -> fav.name.equals(item.name, ignoreCase = true) }) {
+                it
+            } else {
+                it.copy(favoriteItems = listOf(item) + it.favoriteItems)
+            }
+        }
+    }
+
+    fun removeFavoriteMeal(mealName: String) {
+        _uiState.update {
+            it.copy(favoriteItems = it.favoriteItems.filterNot { fav -> fav.name.equals(mealName, ignoreCase = true) })
         }
     }
 

@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     fiber: 0,
     waterIntake: 0,
     waterTarget: 2500,
+    waterDate: null,
+    currentDate: null,
     activeBurned: 0,
     snackCalories: 0,
     breakfastCalories: 0,
@@ -40,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const waterStatusEl = document.getElementById('waterStatusText');
   const waterProgressFill = document.getElementById('waterProgressFill');
   const addWaterBtn = document.getElementById('addWaterBtn');
+  const resetWaterBtn = document.getElementById('resetWaterBtn');
 
   const aiInput = document.getElementById('aiMealInput');
   const aiSubmitBtn = document.getElementById('aiSubmitBtn');
@@ -74,6 +77,88 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggleFrameBtn = document.getElementById('toggleFrameBtn');
   const phoneFrame = document.getElementById('phoneFrame');
 
+  // Day Rollover & Date Utilities
+  function getTodayDateString() {
+    const simulated = localStorage.getItem('fittrack_simulated_date');
+    if (simulated) return simulated;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function formatDisplayDate(dateStr) {
+    let d;
+    if (dateStr) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      } else {
+        d = new Date(dateStr);
+      }
+    } else {
+      d = new Date();
+    }
+    const options = { month: 'long', day: 'numeric' };
+    return `TODAY, ${d.toLocaleDateString('en-US', options).toUpperCase()}`;
+  }
+
+  function updateDateDisplay() {
+    const todayStr = getTodayDateString();
+    const displayStr = formatDisplayDate(todayStr);
+    const dateChips = document.querySelectorAll('.tab-header .date-chip, .date-chip');
+    dateChips.forEach(chip => {
+      if (chip.getAttribute('data-dynamic-date') === 'true' || chip.textContent.includes('SEPTEMBER') || chip.textContent.startsWith('TODAY,') || chip.id === 'nutritionDateChip' || chip.id === 'overviewDateChip') {
+        chip.setAttribute('data-dynamic-date', 'true');
+        chip.textContent = displayStr;
+      }
+    });
+
+    const resetBtn = document.getElementById('resetSimulatedDayBtn');
+    if (resetBtn) {
+      resetBtn.style.display = localStorage.getItem('fittrack_simulated_date') ? 'inline-block' : 'none';
+    }
+  }
+
+  function checkDayRollover() {
+    const todayStr = getTodayDateString();
+    if (!state.currentDate) {
+      state.currentDate = todayStr;
+    }
+
+    let dayChanged = false;
+    // Check if water intake was recorded on a previous day
+    if (state.waterDate && state.waterDate !== todayStr) {
+      console.log(`[FitTrack] Day rollover detected! Previous: ${state.waterDate}, Today: ${todayStr}. Resetting hydration count to 0 ml.`);
+      state.waterIntake = 0;
+      state.waterDate = todayStr;
+      state.currentDate = todayStr;
+      updateWater();
+      dayChanged = true;
+    } else if (state.currentDate !== todayStr) {
+      console.log(`[FitTrack] Day changed from ${state.currentDate} to ${todayStr}. Resetting hydration count to 0 ml.`);
+      state.currentDate = todayStr;
+      state.waterDate = todayStr;
+      state.waterIntake = 0;
+      updateWater();
+      dayChanged = true;
+    }
+
+    updateDateDisplay();
+
+    if (dayChanged) {
+      let curUser = null;
+      try {
+        curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+      } catch (e) {}
+      if (curUser && curUser.email) {
+        saveUserData(curUser.email);
+      }
+    }
+    return dayChanged;
+  }
+
   // Clock
   function updateClock() {
     const clockEl = document.getElementById('statusClock');
@@ -83,9 +168,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const minutes = now.getMinutes().toString().padStart(2, '0');
     hours = hours % 12 || 12;
     clockEl.textContent = `${hours}:${minutes}`;
+    checkDayRollover();
   }
   updateClock();
-  setInterval(updateClock, 30000);
+  updateDateDisplay();
+  setInterval(updateClock, 15000);
+
+  // Check rollover when returning to the tab / window
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      checkDayRollover();
+      updateClock();
+    }
+  });
+  window.addEventListener('focus', () => {
+    checkDayRollover();
+    updateClock();
+  });
 
   // SVG Ring Progress Calculation (Circumference ≈ 515.22 for r=82)
   const CIRCUMFERENCE = 2 * Math.PI * 82;
@@ -222,6 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Water Hydration Logger (+250ml)
   if (addWaterBtn) {
     addWaterBtn.addEventListener('click', () => {
+      checkDayRollover();
+      state.waterDate = getTodayDateString();
       state.waterIntake = Math.min(state.waterIntake + 250, 4000);
       updateWater();
 
@@ -231,6 +332,20 @@ document.addEventListener('DOMContentLoaded', () => {
       // Visual button bounce
       addWaterBtn.style.transform = 'scale(1.1)';
       setTimeout(() => addWaterBtn.style.transform = '', 150);
+    });
+  }
+
+  // Water Hydration Quick Reset (Reset to 0)
+  if (resetWaterBtn) {
+    resetWaterBtn.addEventListener('click', () => {
+      state.waterIntake = 0;
+      state.waterDate = getTodayDateString();
+      updateWater();
+
+      const curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+      if (curUser && curUser.email) saveUserData(curUser.email);
+
+      showToast('Hydration tracker reset to 0 ml');
     });
   }
 
@@ -360,8 +475,33 @@ document.addEventListener('DOMContentLoaded', () => {
     headerProfileJump.addEventListener('click', () => switchTab('tabProfile'));
   }
 
+  function clearScannerInputs() {
+    const mName = document.getElementById('manualItemName');
+    const mCal = document.getElementById('manualCalories');
+    const mProt = document.getElementById('manualProtein');
+    const mCarb = document.getElementById('manualCarbs');
+    const mFat = document.getElementById('manualFat');
+    const mFib = document.getElementById('manualFiber');
+    if (mName) mName.value = '';
+    if (mCal) mCal.value = '';
+    if (mProt) mProt.value = '';
+    if (mCarb) mCarb.value = '';
+    if (mFat) mFat.value = '';
+    if (mFib) mFib.value = '';
+
+    const sName = document.getElementById('searchItemName');
+    const sQty = document.getElementById('searchQuantity');
+    if (sName) sName.value = '';
+    if (sQty) sQty.value = '';
+    document.querySelectorAll('.food-tag-chip').forEach(c => c.classList.remove('active'));
+    if (typeof calculateSearchNutrients === 'function') {
+      calculateSearchNutrients();
+    }
+  }
+
   // Scan Modal Controls
   function openScanner() {
+    clearScannerInputs();
     scanModalBackdrop.classList.add('show');
   }
 
@@ -392,11 +532,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === scanModalBackdrop) closeScanner();
   });
 
-  // Modal Mode Switcher (AI Camera, Item & Qty, Manual)
+  // Modal Mode Switcher (AI Camera, Item & Qty, Manual, Favourites)
   const modeTabs = document.querySelectorAll('.mode-tab');
   const panelCamera = document.getElementById('panelCamera');
   const panelSearch = document.getElementById('panelSearch');
   const panelManual = document.getElementById('panelManual');
+  const panelFavourites = document.getElementById('panelFavourites');
 
   modeTabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -408,15 +549,26 @@ document.addEventListener('DOMContentLoaded', () => {
         panelCamera.style.display = 'block';
         panelSearch.style.display = 'none';
         panelManual.style.display = 'none';
+        if (panelFavourites) panelFavourites.style.display = 'none';
       } else if (mode === 'search') {
         panelCamera.style.display = 'none';
         panelSearch.style.display = 'block';
         panelManual.style.display = 'none';
+        if (panelFavourites) panelFavourites.style.display = 'none';
         calculateSearchNutrients();
       } else if (mode === 'manual') {
         panelCamera.style.display = 'none';
         panelSearch.style.display = 'none';
         panelManual.style.display = 'block';
+        if (panelFavourites) panelFavourites.style.display = 'none';
+      } else if (mode === 'favourites') {
+        panelCamera.style.display = 'none';
+        panelSearch.style.display = 'none';
+        panelManual.style.display = 'none';
+        if (panelFavourites) {
+          panelFavourites.style.display = 'block';
+          fetchFavourites();
+        }
       }
     });
   });
@@ -492,12 +644,26 @@ document.addEventListener('DOMContentLoaded', () => {
     "avocado": { base: "g", cal100: 160, p100: 2, c100: 9, f100: 15, fib100: 7 }
   };
 
-  let currentSearchCalc = { name: "Chicken Breast", qtyText: "150g", cal: 247, p: 46, c: 0, f: 5, fib: 0 };
+  let currentSearchCalc = { name: "Food Item", qtyText: "100g", cal: 0, p: 0, c: 0, f: 0, fib: 0 };
 
   function calculateSearchNutrients() {
-    const rawName = searchItemInput.value.trim().toLowerCase();
-    const qty = parseFloat(searchQtyInput.value) || 100;
+    const rawName = (searchItemInput.value || '').trim().toLowerCase();
+    const qty = parseFloat(searchQtyInput.value) || 0;
     const unit = searchUnitSelect.value;
+
+    if (!rawName || qty <= 0) {
+      const titleText = searchItemInput.value.trim() ? (searchItemInput.value.charAt(0).toUpperCase() + searchItemInput.value.slice(1)) : "Select or Type Food";
+      const portionText = qty > 0 ? `${qty} ${unit} portion` : "Portion & nutrient preview";
+      previewFoodTitle.textContent = titleText;
+      previewFoodQty.textContent = portionText;
+      previewFoodCal.textContent = "0 kcal";
+      prevP.textContent = "0g";
+      prevC.textContent = "0g";
+      prevF.textContent = "0g";
+      prevFib.textContent = "0g";
+      currentSearchCalc = { name: searchItemInput.value.trim() || "Food Item", qtyText: `${qty} ${unit}`, cal: 0, p: 0, c: 0, f: 0, fib: 0 };
+      return;
+    }
 
     let cal = 0, p = 0, c = 0, f = 0, fib = 0;
     let matchedFood = null;
@@ -575,6 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
       currentSearchCalc.f,
       currentSearchCalc.fib
     );
+    clearScannerInputs();
     closeScanner();
   });
 
@@ -605,8 +772,287 @@ document.addEventListener('DOMContentLoaded', () => {
       Math.round(fib)
     );
 
+    clearScannerInputs();
     closeScanner();
   });
+
+  // ==================== FAVOURITES CONTROLLER ====================
+  let userFavourites = [];
+  const favouritesListContainer = document.getElementById('favouritesListContainer');
+  const favCounterBadge = document.getElementById('favCounterBadge');
+  const addToFavouritesBtn = document.getElementById('addToFavouritesBtn');
+  const tabBtnManual = document.getElementById('tabBtnManual');
+  const tabBtnFavourites = document.getElementById('tabBtnFavourites');
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  async function fetchFavourites() {
+    // Purge any legacy dummy seed items that might have been cached in browser localStorage
+    if (localStorage.getItem('fittrack_favs_dummy_cleaned_v3') !== 'true') {
+      localStorage.removeItem('fittrack_favs_cache');
+      localStorage.setItem('fittrack_favs_dummy_cleaned_v3', 'true');
+    }
+
+    try {
+      const curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+      const token = localStorage.getItem('fittrack_token');
+      const email = curUser ? curUser.email : 'default';
+
+      const res = await fetch(`/api/favorites?email=${encodeURIComponent(email)}`, {
+        headers: {
+          'Authorization': token ? 'Bearer ' + token : '',
+          'X-User-Email': email
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.favorites)) {
+          userFavourites = data.favorites.filter(f => !f.id || !f.id.startsWith('fav_seed_'));
+          localStorage.setItem('fittrack_favs_cache', JSON.stringify(userFavourites));
+          renderFavouritesList(userFavourites);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed fetching favorites from backend:', err);
+    }
+    // Fallback: localStorage cache
+    const cached = localStorage.getItem('fittrack_favs_cache');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          userFavourites = parsed.filter(f => !f.id || !f.id.startsWith('fav_seed_'));
+        } else {
+          userFavourites = [];
+        }
+      } catch (e) {
+        userFavourites = [];
+      }
+    } else {
+      userFavourites = [];
+    }
+    renderFavouritesList(userFavourites);
+  }
+
+  function renderFavouritesList(items) {
+    if (!favouritesListContainer) return;
+    if (favCounterBadge) {
+      favCounterBadge.textContent = `${items.length} saved`;
+    }
+
+    if (!items || items.length === 0) {
+      favouritesListContainer.innerHTML = `
+        <div class="fav-empty-box">
+          <span class="fav-empty-icon">⭐</span>
+          <div class="fav-empty-title">No Favourites Saved Yet</div>
+          <p class="fav-empty-sub">Type a meal in the <strong>Manual</strong> tab and tap <strong>Add to Favourites</strong> to save it here for fast 1-tap logging.</p>
+        </div>
+      `;
+      return;
+    }
+
+    favouritesListContainer.innerHTML = items.map(fav => `
+      <div class="fav-food-card" data-id="${fav.id}">
+        <div class="fav-card-head">
+          <div>
+            <div class="fav-name">${escapeHtml(fav.name)}</div>
+            <div class="fav-portion">${escapeHtml(fav.portion || '1 serving')}</div>
+          </div>
+          <span class="fav-calories">${(fav.calories || 0).toLocaleString()} kcal</span>
+        </div>
+        <div class="fav-macros-strip">
+          <span class="fav-macro-pill"><span class="dot bg-protein"></span>P: ${fav.protein || 0}g</span>
+          <span class="fav-macro-pill"><span class="dot bg-carbs"></span>C: ${fav.carbs || 0}g</span>
+          <span class="fav-macro-pill"><span class="dot bg-fats"></span>F: ${fav.fats || 0}g</span>
+          ${fav.fiber ? `<span class="fav-macro-pill">Fib: ${fav.fiber}g</span>` : ''}
+        </div>
+        <div class="fav-card-foot">
+          <div class="fav-action-btn-group">
+            <button type="button" class="fav-btn-log" data-id="${fav.id}" title="Log this favourite into your current meal log">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              Log to Meal
+            </button>
+            <button type="button" class="fav-btn-edit" data-id="${fav.id}" title="Load this into Manual tab form to customize">
+              Fill in Form
+            </button>
+          </div>
+          <button type="button" class="fav-btn-delete" data-id="${fav.id}" title="Remove from Favourites">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    // Attach Log to Meal actions
+    favouritesListContainer.querySelectorAll('.fav-btn-log').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        const fav = userFavourites.find(f => f.id === id);
+        if (fav) {
+          logFoodItem(
+            fav.name,
+            fav.portion || 'Favourite Serving',
+            fav.calories,
+            fav.protein,
+            fav.carbs,
+            fav.fats,
+            fav.fiber || 0
+          );
+          const curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+          if (curUser && curUser.email) saveUserData(curUser.email);
+          closeScanner();
+          showToast(`✓ Logged "${fav.name}" to ${currentTargetMeal}!`);
+        }
+      });
+    });
+
+    // Attach Fill in Form actions
+    favouritesListContainer.querySelectorAll('.fav-btn-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        const fav = userFavourites.find(f => f.id === id);
+        if (fav) {
+          if (manualItemNameInput) manualItemNameInput.value = fav.name;
+          if (manualCaloriesInput) manualCaloriesInput.value = fav.calories;
+          if (manualProteinInput) manualProteinInput.value = fav.protein;
+          if (manualCarbsInput) manualCarbsInput.value = fav.carbs;
+          if (manualFatInput) manualFatInput.value = fav.fats;
+          if (manualFiberInput) manualFiberInput.value = fav.fiber || 0;
+
+          if (tabBtnManual) tabBtnManual.click();
+          showToast(`Loaded "${fav.name}" into Manual form!`);
+        }
+      });
+    });
+
+    // Attach Delete actions
+    favouritesListContainer.querySelectorAll('.fav-btn-delete').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.currentTarget.dataset.id;
+        const fav = userFavourites.find(f => f.id === id);
+        const name = fav ? fav.name : 'Item';
+
+        userFavourites = userFavourites.filter(f => f.id !== id);
+        renderFavouritesList(userFavourites);
+        localStorage.setItem('fittrack_favs_cache', JSON.stringify(userFavourites));
+
+        try {
+          const curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+          const token = localStorage.getItem('fittrack_token');
+          const email = curUser ? curUser.email : 'default';
+
+          await fetch(`/api/favorites/${encodeURIComponent(id)}?email=${encodeURIComponent(email)}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': token ? 'Bearer ' + token : '',
+              'X-User-Email': email
+            }
+          });
+        } catch (err) {
+          console.warn('Backend delete error:', err);
+        }
+        showToast(`Removed "${name}" from Favourites`);
+      });
+    });
+  }
+
+  // Handle Add to Favourites click from Manual Entry
+  if (addToFavouritesBtn) {
+    addToFavouritesBtn.addEventListener('click', async () => {
+      const rawName = (manualItemNameInput ? manualItemNameInput.value.trim() : '');
+      if (!rawName) {
+        showToast('Please enter a Food Item Name first!');
+        if (manualItemNameInput) manualItemNameInput.focus();
+        return;
+      }
+      const name = rawName;
+      const cal = parseInt(manualCaloriesInput ? manualCaloriesInput.value : 0, 10) || 0;
+      const p = parseFloat(manualProteinInput ? manualProteinInput.value : 0) || 0;
+      const c = parseFloat(manualCarbsInput ? manualCarbsInput.value : 0) || 0;
+      const f = parseFloat(manualFatInput ? manualFatInput.value : 0) || 0;
+      const fib = parseFloat(manualFiberInput ? manualFiberInput.value : 0) || 0;
+
+      const curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+      const token = localStorage.getItem('fittrack_token');
+      const email = curUser ? curUser.email : 'default';
+
+      // Visual feedback on button
+      addToFavouritesBtn.classList.add('saved');
+      addToFavouritesBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span>★ Added!</span>
+      `;
+      setTimeout(() => {
+        addToFavouritesBtn.classList.remove('saved');
+        addToFavouritesBtn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>Add to Favourites</span>
+        `;
+      }, 1500);
+
+      try {
+        const res = await fetch('/api/favorites', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? 'Bearer ' + token : '',
+            'X-User-Email': email
+          },
+          body: JSON.stringify({
+            email,
+            name,
+            portion: `1 serving (Fib: ${fib}g)`,
+            calories: cal,
+            protein: Math.round(p),
+            carbs: Math.round(c),
+            fats: Math.round(f),
+            fiber: Math.round(fib)
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.favorite) {
+            userFavourites.unshift(data.favorite);
+            localStorage.setItem('fittrack_favs_cache', JSON.stringify(userFavourites));
+            renderFavouritesList(userFavourites);
+            showToast(`★ Added "${name}" to Favourites!`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('API error adding favorite:', err);
+      }
+
+      // Offline / fallback storage
+      const fallbackFav = {
+        id: 'fav_loc_' + Date.now(),
+        name,
+        portion: `1 serving (Fib: ${fib}g)`,
+        calories: cal,
+        protein: Math.round(p),
+        carbs: Math.round(c),
+        fats: Math.round(f),
+        fiber: Math.round(fib),
+        createdAt: Date.now()
+      };
+      userFavourites.unshift(fallbackFav);
+      localStorage.setItem('fittrack_favs_cache', JSON.stringify(userFavourites));
+      renderFavouritesList(userFavourites);
+      showToast(`★ Added "${name}" to Favourites!`);
+    });
+  }
+
+  // Initial fetch of favourites on app startup
+  fetchFavourites();
 
   // Workout Timer & Controls
   startWorkoutBtn.addEventListener('click', () => {
@@ -922,6 +1368,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Reset all tracked daily metrics to 0 (for newly registered & fresh users)
   function resetUserDataToZero() {
+    const todayStr = getTodayDateString();
+    state.currentDate = todayStr;
+    state.waterDate = todayStr;
     state.consumedCalories = 0;
     state.carbs = 0;
     state.protein = 0;
@@ -993,6 +1442,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Restore pre-seeded demo state (only for alex.rivera@wellness.io)
   function loadDemoData() {
+    const todayStr = getTodayDateString();
+    state.currentDate = todayStr;
+    state.waterDate = todayStr;
     state.consumedCalories = 1320;
     state.targetCalories = 2300;
     state.carbs = 142;
@@ -1006,6 +1458,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateMacroRings();
     updateWater();
+    updateDateDisplay();
 
     const breakfastSummary = document.getElementById('breakfastSummary');
     const breakfastItemList = document.getElementById('breakfastItemList');
@@ -1087,19 +1540,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Save current user state to localStorage
   function saveUserData(email) {
-    if (!email || email === 'alex.rivera@wellness.io') return;
+    if (!email) return;
     const breakfastItemList = document.getElementById('breakfastItemList');
     const lunchItemList = document.getElementById('lunchItemList');
+    const todayStr = getTodayDateString();
 
     const userData = {
+      date: todayStr,
+      waterDate: state.waterDate || todayStr,
+      waterIntake: state.waterIntake,
+      waterTarget: state.waterTarget,
       consumedCalories: state.consumedCalories,
       targetCalories: state.targetCalories,
       carbs: state.carbs,
       protein: state.protein,
       fats: state.fats,
       fiber: state.fiber,
-      waterIntake: state.waterIntake,
-      waterTarget: state.waterTarget,
       activeBurned: state.activeBurned,
       snackCalories: state.snackCalories || 0,
       breakfastCalories: state.breakfastCalories || 0,
@@ -1118,8 +1574,29 @@ document.addEventListener('DOMContentLoaded', () => {
       resetUserDataToZero();
       return;
     }
+    const todayStr = getTodayDateString();
+    state.currentDate = todayStr;
+
     if (email === 'alex.rivera@wellness.io') {
       loadDemoData();
+      const saved = localStorage.getItem('fittrack_data_' + email);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          const savedWaterDate = parsed.waterDate || parsed.date;
+          if (savedWaterDate && savedWaterDate !== todayStr) {
+            state.waterIntake = 0;
+            state.waterDate = todayStr;
+            updateWater();
+            saveUserData(email);
+          } else if (parsed.waterIntake !== undefined) {
+            state.waterIntake = parsed.waterIntake;
+            state.waterDate = savedWaterDate || todayStr;
+            updateWater();
+          }
+        } catch (e) {}
+      }
+      updateDateDisplay();
       return;
     }
 
@@ -1145,6 +1622,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+
+        // Check if saved hydration was from a previous calendar day
+        const savedWaterDate = parsed.waterDate || parsed.date;
+        const isNewDay = savedWaterDate && savedWaterDate !== todayStr;
+
+        if (isNewDay) {
+          console.log(`[FitTrack] New day detected (${todayStr}, last record was ${savedWaterDate}). Resetting hydration count to 0 ml.`);
+          state.waterIntake = 0;
+          state.waterDate = todayStr;
+        } else {
+          state.waterIntake = parsed.waterIntake || 0;
+          state.waterDate = savedWaterDate || todayStr;
+        }
+
+        // If saved data didn't have waterDate, ensure it's saved now
+        if (!parsed.waterDate) {
+          saveUserData(email);
+        }
+
         state.consumedCalories = parsed.consumedCalories || 0;
         // Only fallback to cached target if user profile targets are absent
         if (!curUser?.nutritionTargets?.targetCalories && parsed.targetCalories) {
@@ -1154,7 +1650,6 @@ document.addEventListener('DOMContentLoaded', () => {
         state.protein = parsed.protein || 0;
         state.fats = parsed.fats || 0;
         state.fiber = parsed.fiber || 0;
-        state.waterIntake = parsed.waterIntake || 0;
         if (!curUser?.nutritionTargets?.targetWater && parsed.waterTarget) {
           state.waterTarget = parsed.waterTarget;
         }
@@ -1190,6 +1685,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         updateOverviewMetrics();
+        updateDateDisplay();
+
+        // If it was a new day, immediately save the reset state
+        if (isNewDay) {
+          saveUserData(email);
+        }
         return;
       } catch (e) {
         console.warn('Failed parsing saved user data', e);
@@ -1198,6 +1699,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Default for fresh user: strictly 0
     resetUserDataToZero();
+    state.waterDate = todayStr;
+    updateDateDisplay();
   }
 
   // Check stored active session on startup
@@ -2450,4 +2953,52 @@ document.addEventListener('DOMContentLoaded', () => {
       showAuthView('login');
     });
   }
+
+  // Simulation of Day Rollover for Testing & Verification
+  const simulateNextDayBtn = document.getElementById('simulateNextDayBtn');
+  const resetSimulatedDayBtn = document.getElementById('resetSimulatedDayBtn');
+
+  function simulateNextDay() {
+    const currentSim = getTodayDateString();
+    const parts = currentSim.split('-');
+    const curDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    curDate.setDate(curDate.getDate() + 1);
+
+    const year = curDate.getFullYear();
+    const month = String(curDate.getMonth() + 1).padStart(2, '0');
+    const day = String(curDate.getDate()).padStart(2, '0');
+    const nextDateStr = `${year}-${month}-${day}`;
+
+    localStorage.setItem('fittrack_simulated_date', nextDateStr);
+
+    // Trigger rollover and reset hydration
+    checkDayRollover();
+
+    const displayStr = formatDisplayDate(nextDateStr);
+    showToast(`☀️ Day advanced to ${displayStr}! Hydration reset to 0 ml.`);
+  }
+
+  function resetSimulatedDate() {
+    localStorage.removeItem('fittrack_simulated_date');
+    checkDayRollover();
+    const displayStr = formatDisplayDate(getTodayDateString());
+    showToast(`🔄 Restored actual date: ${displayStr}`);
+  }
+
+  if (simulateNextDayBtn) {
+    simulateNextDayBtn.addEventListener('click', simulateNextDay);
+  }
+  if (resetSimulatedDayBtn) {
+    resetSimulatedDayBtn.addEventListener('click', resetSimulatedDate);
+  }
+
+  // Expose FitTrackApp API globally for testing and automation
+  window.FitTrackApp = {
+    simulateNextDay,
+    resetSimulatedDate,
+    checkDayRollover,
+    getWaterIntake: () => state.waterIntake,
+    getWaterDate: () => state.waterDate,
+    getTodayDateString
+  };
 });

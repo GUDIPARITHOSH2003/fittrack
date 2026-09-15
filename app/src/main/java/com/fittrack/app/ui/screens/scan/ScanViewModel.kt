@@ -30,26 +30,18 @@ data class ScanUiState(
     val cameraDetectedResult: ScannedFoodResult? = null,
 
     // Mode 2: Search Item & Quantity
-    val searchItemName: String = "Chicken Breast",
-    val searchQuantity: String = "150",
+    val searchItemName: String = "",
+    val searchQuantity: String = "",
     val searchUnit: String = "g",
-    val searchCalculatedResult: ScannedFoodResult? = ScannedFoodResult(
-        title = "Chicken Breast",
-        portion = "150g portion calculated",
-        calories = 247,
-        carbs = 0,
-        protein = 46,
-        fats = 5,
-        fiber = 0
-    ),
+    val searchCalculatedResult: ScannedFoodResult? = null,
 
     // Mode 3: Manual Entry (Item, Calories, Protein, Carbs, Fat, Fiber)
-    val manualItemName: String = "Homemade Protein Bowl",
-    val manualCalories: String = "380",
-    val manualProtein: String = "30",
-    val manualCarbs: String = "45",
-    val manualFats: String = "9",
-    val manualFiber: String = "7"
+    val manualItemName: String = "",
+    val manualCalories: String = "",
+    val manualProtein: String = "",
+    val manualCarbs: String = "",
+    val manualFats: String = "",
+    val manualFiber: String = ""
 )
 
 @HiltViewModel

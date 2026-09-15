@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const PORT = process.env.PORT || 8080;
 const DATA_FILE = path.join(__dirname, 'data', 'users.json');
 const GOOGLE_CONFIG_FILE = path.join(__dirname, 'data', 'google-config.json');
+const FAVORITES_FILE = path.join(__dirname, 'data', 'favorites.json');
 const PREVIEW_DIR = path.join(__dirname, 'preview');
 
 // Google OAuth Configuration persistence
@@ -228,6 +229,37 @@ function saveUsers(users) {
   }
 }
 
+// Favorites persistence helpers
+function getFavoritesMap() {
+  try {
+    if (!fs.existsSync(FAVORITES_FILE)) {
+      fs.writeFileSync(FAVORITES_FILE, JSON.stringify({}, null, 2), 'utf8');
+      return {};
+    }
+    const data = fs.readFileSync(FAVORITES_FILE, 'utf8');
+    return JSON.parse(data || '{}');
+  } catch (err) {
+    console.error('Error reading favorites file:', err);
+    return {};
+  }
+}
+
+function saveFavoritesMap(map) {
+  try {
+    fs.writeFileSync(FAVORITES_FILE, JSON.stringify(map, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('Error saving favorites file:', err);
+    return false;
+  }
+}
+
+function getUserFavorites(userKey) {
+  const map = getFavoritesMap();
+  const normalizedKey = (userKey || 'default').toLowerCase().trim();
+  return map[normalizedKey] || [];
+}
+
 // Helper to parse JSON request bodies
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -306,14 +338,15 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Email'
     });
     return res.end();
   }
 
   const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
   const pathname = parsedUrl.pathname;
+  const query = Object.fromEntries(parsedUrl.searchParams.entries());
 
   // ==================== REST API ENDPOINTS ====================
 
@@ -937,6 +970,139 @@ const server = http.createServer(async (req, res) => {
       activeSessions.delete(token);
     }
     return sendJson(res, 200, { success: true, message: 'Google session successfully revoked' });
+  }
+
+  // ==================== 10. FAVORITES / FAVOURITES API ====================
+  const isFavoritesRoute = pathname === '/api/favorites' || pathname === '/api/favourites';
+  const isFavoritesIdRoute = pathname.startsWith('/api/favorites/') || pathname.startsWith('/api/favourites/');
+
+  function getAuthenticatedEmail(req, queryParams = {}) {
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (token && activeSessions.has(token)) {
+      const session = activeSessions.get(token);
+      if (Date.now() <= session.expiresAt) {
+        const users = getUsers();
+        const user = users.find(u => u.id === session.userId);
+        if (user && user.email) return user.email.toLowerCase().trim();
+      }
+    }
+    if (queryParams.email && typeof queryParams.email === 'string') {
+      return queryParams.email.toLowerCase().trim();
+    }
+    const headerEmail = req.headers['x-user-email'];
+    if (headerEmail && typeof headerEmail === 'string' && headerEmail.trim()) {
+      return headerEmail.toLowerCase().trim();
+    }
+    return 'default';
+  }
+
+  // 10a. GET /api/favorites (Fetch all favourites for user)
+  if (isFavoritesRoute && req.method === 'GET') {
+    try {
+      const userKey = getAuthenticatedEmail(req, query);
+      const favorites = getUserFavorites(userKey);
+      return sendJson(res, 200, {
+        success: true,
+        user: userKey,
+        count: favorites.length,
+        favorites
+      });
+    } catch (err) {
+      console.error('Error in GET /api/favorites:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to fetch favourites' });
+    }
+  }
+
+  // 10b. POST /api/favorites (Add food item to favourites)
+  if (isFavoritesRoute && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody(req);
+      const { name, calories, protein, carbs, fats, fiber, portion, email } = body;
+
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        return sendJson(res, 400, { success: false, message: 'Food item name is required' });
+      }
+
+      const userKey = email ? email.toLowerCase().trim() : getAuthenticatedEmail(req, query);
+      const map = getFavoritesMap();
+      if (!map[userKey]) {
+        map[userKey] = (map['default'] || []).map(f => ({
+          ...f,
+          id: 'fav_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)
+        }));
+      }
+
+      const newFavorite = {
+        id: 'fav_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        name: name.trim(),
+        portion: (portion || '1 serving').trim(),
+        calories: Math.max(parseInt(calories, 10) || 0, 0),
+        protein: Math.max(parseFloat(protein) || 0, 0),
+        carbs: Math.max(parseFloat(carbs) || 0, 0),
+        fats: Math.max(parseFloat(fats) || 0, 0),
+        fiber: Math.max(parseFloat(fiber) || 0, 0),
+        createdAt: Date.now()
+      };
+
+      map[userKey].unshift(newFavorite);
+      saveFavoritesMap(map);
+
+      console.log(`[API] Added favourite "${newFavorite.name}" (${newFavorite.calories} kcal) for user ${userKey}`);
+      return sendJson(res, 201, {
+        success: true,
+        message: `"${newFavorite.name}" added to favourites`,
+        favorite: newFavorite,
+        favorites: map[userKey]
+      });
+    } catch (err) {
+      console.error('Error in POST /api/favorites:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to add favourite' });
+    }
+  }
+
+  // 10c. DELETE /api/favorites/:id or POST /api/favorites/delete (Remove from favourites)
+  if ((isFavoritesIdRoute && req.method === 'DELETE') || 
+      ((pathname === '/api/favorites/delete' || pathname === '/api/favourites/delete') && req.method === 'POST') ||
+      (isFavoritesRoute && req.method === 'DELETE')) {
+    try {
+      let favId = '';
+      let emailParam = '';
+      if (isFavoritesIdRoute) {
+        const parts = pathname.split('/');
+        favId = parts[parts.length - 1];
+      }
+      if (!favId && query.id) {
+        favId = query.id;
+      }
+      if (req.method === 'POST' || !favId) {
+        const body = await parseJsonBody(req);
+        if (body.id) favId = body.id;
+        if (body.email) emailParam = body.email;
+      }
+
+      if (!favId) {
+        return sendJson(res, 400, { success: false, message: 'Favourite ID is required' });
+      }
+
+      const userKey = emailParam ? emailParam.toLowerCase().trim() : getAuthenticatedEmail(req, query);
+      const map = getFavoritesMap();
+      if (map[userKey]) {
+        map[userKey] = map[userKey].filter(f => f.id !== favId);
+        saveFavoritesMap(map);
+      }
+
+      console.log(`[API] Removed favourite ${favId} for user ${userKey}`);
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Favourite removed',
+        id: favId,
+        favorites: map[userKey] || []
+      });
+    } catch (err) {
+      console.error('Error deleting favourite:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to delete favourite' });
+    }
   }
 
   // ==================== STATIC ASSETS ====================
