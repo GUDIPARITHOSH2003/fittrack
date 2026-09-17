@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const aiInput = document.getElementById('aiMealInput');
   const aiSubmitBtn = document.getElementById('aiSubmitBtn');
-  const suggestionChips = document.querySelectorAll('.suggestion-chip');
+  const suggestionChips = document.querySelectorAll('.suggestion-chip[data-meal]');
   const snackItemList = document.getElementById('snackItemList');
   const snackSummary = document.getElementById('snackSummary');
 
@@ -128,20 +128,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let dayChanged = false;
-    // Check if water intake was recorded on a previous day
-    if (state.waterDate && state.waterDate !== todayStr) {
-      console.log(`[FitTrack] Day rollover detected! Previous: ${state.waterDate}, Today: ${todayStr}. Resetting hydration count to 0 ml.`);
+    const lastDate = state.waterDate || state.currentDate;
+    if (lastDate && lastDate !== todayStr) {
+      console.log(`[FitTrack] Day rollover detected! Previous: ${lastDate}, Today: ${todayStr}. Resetting calories & hydration count to 0.`);
       state.waterIntake = 0;
       state.waterDate = todayStr;
       state.currentDate = todayStr;
+      state.consumedCalories = 0;
+      state.carbs = 0;
+      state.protein = 0;
+      state.fats = 0;
+      state.fiber = 0;
+      state.activeBurned = 0;
+      state.snackCalories = 0;
+      state.breakfastCalories = 0;
+      state.lunchCalories = 0;
+      state.dinnerCalories = 0;
+
+      const breakfastItemList = document.getElementById('breakfastItemList');
+      if (breakfastItemList) {
+        breakfastItemList.innerHTML = '<li class="meal-empty-note">No breakfast logged yet today. Tap + to add food.</li>';
+      }
+      const lunchItemList = document.getElementById('lunchItemList');
+      if (lunchItemList) {
+        lunchItemList.innerHTML = '<li class="meal-empty-note">No lunch logged yet today. Tap + to add food.</li>';
+      }
+      if (snackItemList) {
+        snackItemList.innerHTML = '<li class="meal-empty-note">No snacks logged yet today. Tap + to add food.</li>';
+      }
+
+      updateMacroRings();
       updateWater();
-      dayChanged = true;
-    } else if (state.currentDate !== todayStr) {
-      console.log(`[FitTrack] Day changed from ${state.currentDate} to ${todayStr}. Resetting hydration count to 0 ml.`);
-      state.currentDate = todayStr;
-      state.waterDate = todayStr;
-      state.waterIntake = 0;
-      updateWater();
+      updateMealSummaries();
+      completedSetMap = {};
+      if (typeof renderExerciseChecklist === 'function') renderExerciseChecklist();
+      updateOverviewMetrics();
       dayChanged = true;
     }
 
@@ -351,8 +372,156 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentTargetMeal = 'snack';
 
+  function createMealItemHtml(name, portion, calories, protein, carbs, fats, fiber = 0, mealType = 'snack') {
+    const fibStr = fiber > 0 ? ` • Fib: ${fiber}g` : '';
+    const safeName = (name || '').replace(/"/g, '&quot;');
+    return `
+      <li class="meal-item" data-cal="${calories}" data-p="${protein}" data-c="${carbs}" data-f="${fats}" data-fib="${fiber}" data-meal-type="${mealType}" data-name="${safeName}">
+        <div style="flex: 1; min-width: 0; padding-right: 8px;">
+          <div class="item-title" style="word-break: break-word; font-weight: 600;">${name}</div>
+          <div class="item-macros" style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">${portion} • P: ${protein}g • C: ${carbs}g • F: ${fats}g${fibStr}</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <span class="item-cal" style="font-weight: 700; font-size: 13px;">${calories} kcal</span>
+          <button type="button" class="delete-meal-btn" title="Delete ${safeName}" style="background: rgba(239, 68, 68, 0.1); border: none; color: #ef4444; border-radius: 6px; padding: 4px 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background 0.2s ease;" onmouseover="this.style.background='rgba(239,68,68,0.22)'" onmouseout="this.style.background='rgba(239,68,68,0.1)'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+      </li>
+    `;
+  }
+
+  function ensureDeleteButtonsInMealLists() {
+    document.querySelectorAll('.meal-item').forEach(li => {
+      const titleEl = li.querySelector('.item-title');
+      const nameStr = titleEl ? titleEl.textContent.trim() : '';
+      if (!nameStr || nameStr.toLowerCase() === 'undefined') {
+        li.remove();
+        return;
+      }
+      const rawCalEl = li.querySelector('.item-cal');
+      if (rawCalEl && (rawCalEl.textContent.includes('NaN') || rawCalEl.textContent.includes('null'))) {
+        li.remove();
+        return;
+      }
+
+      if (!li.querySelector('.delete-meal-btn')) {
+        let cal = parseInt(li.dataset.cal, 10);
+        if (isNaN(cal)) {
+          const calEl = li.querySelector('.item-cal');
+          if (calEl) {
+            cal = parseInt((calEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0;
+            li.dataset.cal = cal;
+          }
+        }
+        let p = parseInt(li.dataset.p, 10);
+        let c = parseInt(li.dataset.c, 10);
+        let f = parseInt(li.dataset.f, 10);
+        if (isNaN(p) || isNaN(c) || isNaN(f)) {
+          const macroEl = li.querySelector('.item-macros');
+          if (macroEl) {
+            const matchP = (macroEl.textContent || '').match(/P:\s*(\d+)g/i);
+            const matchC = (macroEl.textContent || '').match(/C:\s*(\d+)g/i);
+            const matchF = (macroEl.textContent || '').match(/F:\s*(\d+)g/i);
+            if (matchP) li.dataset.p = matchP[1];
+            if (matchC) li.dataset.c = matchC[1];
+            if (matchF) li.dataset.f = matchF[1];
+          }
+        }
+
+        const titleEl = li.querySelector('.item-title');
+        const name = titleEl ? titleEl.textContent.trim() : 'Food item';
+        li.dataset.name = name;
+
+        let mealType = 'snack';
+        if (li.closest('#breakfastItemList')) mealType = 'breakfast';
+        else if (li.closest('#dinnerItemList')) mealType = 'dinner';
+        else if (li.closest('#lunchItemList')) mealType = 'lunch';
+        li.dataset.mealType = mealType;
+
+        const calEl = li.querySelector('.item-cal');
+        if (calEl) {
+          const containerDiv = document.createElement('div');
+          containerDiv.style.cssText = 'display: flex; align-items: center; gap: 8px; flex-shrink: 0;';
+          calEl.parentNode.insertBefore(containerDiv, calEl);
+          containerDiv.appendChild(calEl);
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.type = 'button';
+          deleteBtn.className = 'delete-meal-btn';
+          deleteBtn.title = `Delete ${name}`;
+          deleteBtn.style.cssText = 'background: rgba(239, 68, 68, 0.1); border: none; color: #ef4444; border-radius: 6px; padding: 4px 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;';
+          deleteBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          `;
+          containerDiv.appendChild(deleteBtn);
+        }
+      }
+    });
+  }
+
+  // Handle Meal Item Deletion
+  document.addEventListener('click', (e) => {
+    const deleteBtn = e.target.closest('.delete-meal-btn');
+    if (!deleteBtn) return;
+
+    const li = deleteBtn.closest('.meal-item');
+    if (!li) return;
+
+    const cal = parseInt(li.dataset.cal || '0', 10);
+    const p = parseFloat(li.dataset.p || '0');
+    const c = parseFloat(li.dataset.c || '0');
+    const f = parseFloat(li.dataset.f || '0');
+    const fib = parseFloat(li.dataset.fib || '0');
+    const mealType = li.dataset.mealType || 'snack';
+    const name = li.dataset.name || 'Food item';
+
+    // Subtract from total consumed state
+    state.consumedCalories = Math.max(0, state.consumedCalories - cal);
+    state.protein = Math.max(0, state.protein - Math.round(p));
+    state.carbs = Math.max(0, state.carbs - Math.round(c));
+    state.fats = Math.max(0, state.fats - Math.round(f));
+    state.fiber = Math.max(0, (state.fiber || 0) - Math.round(fib));
+
+    if (mealType === 'breakfast') {
+      state.breakfastCalories = Math.max(0, (state.breakfastCalories || 0) - cal);
+    } else if (mealType === 'lunch') {
+      state.lunchCalories = Math.max(0, (state.lunchCalories || 0) - cal);
+    } else if (mealType === 'dinner') {
+      state.dinnerCalories = Math.max(0, (state.dinnerCalories || 0) - cal);
+    } else {
+      state.snackCalories = Math.max(0, (state.snackCalories || 0) - cal);
+    }
+
+    const parentList = li.parentElement;
+    li.remove();
+
+    if (parentList && parentList.querySelectorAll('.meal-item').length === 0) {
+      parentList.innerHTML = `<li class="meal-empty-note">No ${mealType} logged yet today. Tap + to add food.</li>`;
+    }
+
+    updateMacroRings();
+    updateMealSummaries();
+    updateOverviewMetrics();
+
+    const curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+    if (curUser && curUser.email) saveUserData(curUser.email);
+
+    showToast(`🗑️ Removed "${name}" (-${cal} kcal)`);
+  });
+
   // Food Logging Function (shared by NLP input, chips, scanner, search, and manual)
   function logFoodItem(name, portion, calories, protein, carbs, fats, fiber = 0) {
+    if (!name || name === 'undefined' || isNaN(calories) || calories === null) {
+      console.warn('[FitTrack] Invalid food item log ignored:', name, calories);
+      return;
+    }
     state.consumedCalories += calories;
     state.protein += protein;
     state.carbs += carbs;
@@ -360,13 +529,15 @@ document.addEventListener('DOMContentLoaded', () => {
     state.fiber = (state.fiber || 0) + fiber;
 
     let targetList = snackItemList;
-    if (currentTargetMeal === 'breakfast') {
+    const mealType = currentTargetMeal || 'snack';
+    if (mealType === 'breakfast') {
       targetList = document.getElementById('breakfastItemList');
       state.breakfastCalories = (state.breakfastCalories || 0) + calories;
-    } else if (currentTargetMeal === 'lunch') {
+    } else if (mealType === 'lunch') {
       targetList = document.getElementById('lunchItemList');
       state.lunchCalories = (state.lunchCalories || 0) + calories;
-    } else if (currentTargetMeal === 'dinner') {
+    } else if (mealType === 'dinner') {
+      targetList = document.getElementById('dinnerItemList');
       state.dinnerCalories = (state.dinnerCalories || 0) + calories;
     } else {
       targetList = snackItemList;
@@ -377,17 +548,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const emptyNote = targetList.querySelector('.meal-empty-note');
       if (emptyNote) emptyNote.remove();
 
-      const li = document.createElement('li');
-      li.className = 'meal-item';
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = createMealItemHtml(name, portion, calories, protein, carbs, fats, fiber, mealType);
+      const li = tempDiv.firstElementChild;
       li.style.animation = 'fadeIn 0.3s ease';
-      const fibStr = fiber > 0 ? ` • Fib: ${fiber}g` : '';
-      li.innerHTML = `
-        <div>
-          <div class="item-title">${name}</div>
-          <div class="item-macros">${portion} • P: ${protein}g • C: ${carbs}g • F: ${fats}g${fibStr}</div>
-        </div>
-        <span class="item-cal">${calories} kcal</span>
-      `;
       targetList.prepend(li);
     }
 
@@ -462,6 +626,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Scroll viewport to top
     const viewport = document.querySelector('.screen-viewport');
     if (viewport) viewport.scrollTop = 0;
+
+    // Immediately refresh target screen metrics in real time on tab switch
+    if (targetTabId === 'tabOverview') {
+      if (typeof updateOverviewMetrics === 'function') updateOverviewMetrics();
+    } else if (targetTabId === 'tabNutrition') {
+      if (typeof updateMacroRings === 'function') updateMacroRings();
+    } else if (targetTabId === 'tabWorkout') {
+      if (typeof updateWorkoutHeroUI === 'function') updateWorkoutHeroUI();
+    }
   }
 
   navItems.forEach(item => {
@@ -1054,67 +1227,232 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initial fetch of favourites on app startup
   fetchFavourites();
 
-  // Workout Timer & Controls
-  startWorkoutBtn.addEventListener('click', () => {
-    state.workoutActive = !state.workoutActive;
-    if (state.workoutActive) {
-      startWorkoutBtn.textContent = 'Pause Active Workout';
-      startWorkoutBtn.style.background = '#374151';
-      activeTimerBadge.style.display = 'inline-flex';
+  // ==================== DYNAMIC WORKOUT TRACKER MODULE ====================
+  const exerciseLibrary = [
+    // BICEPS
+    { id: 'hammer_curl', name: 'Hammer Curls', muscle: 'biceps', muscleTag: 'Biceps & Brachialis', meta: '3 sets × 10 reps • 14 kg dumbbells', calBurn: 65 },
+    { id: 'incline_db_curl', name: 'Incline Dumbbell Curls', muscle: 'biceps', muscleTag: 'Biceps Long Head', meta: '3 sets × 10 reps • 12 kg dumbbells', calBurn: 60 },
+    { id: 'barbell_bicep_curl', name: 'Barbell Bicep Curls', muscle: 'biceps', muscleTag: 'Biceps Overall', meta: '3 sets × 10 reps • 30 kg EZ Bar', calBurn: 75 },
+    { id: 'preacher_curl', name: 'Preacher Curls', muscle: 'biceps', muscleTag: 'Biceps Short Head', meta: '3 sets × 10 reps • 25 kg EZ Bar', calBurn: 70 },
 
-      state.workoutInterval = setInterval(() => {
-        state.workoutSeconds++;
-        const mins = Math.floor(state.workoutSeconds / 60).toString().padStart(2, '0');
-        const secs = (state.workoutSeconds % 60).toString().padStart(2, '0');
-        activeTimerVal.textContent = `${mins}:${secs}`;
-      }, 1000);
-    } else {
-      startWorkoutBtn.textContent = 'Resume Workout';
-      startWorkoutBtn.style.background = 'var(--pill-dark)';
-      clearInterval(state.workoutInterval);
-    }
-  });
+    // TRICEPS
+    { id: 'tricep_db_ext', name: 'Dumbbell Tricep Extension', muscle: 'triceps', muscleTag: 'Triceps Long Head', meta: '3 sets × 10 reps • 20 kg dumbbell', calBurn: 55 },
+    { id: 'tricep_pushdown', name: 'Cable Tricep Pushdowns', muscle: 'triceps', muscleTag: 'Triceps Lateral Head', meta: '3 sets × 10 reps • 35 kg cable', calBurn: 65 },
+    { id: 'skullcrushers', name: 'Barbell Skullcrushers', muscle: 'triceps', muscleTag: 'Triceps Overall', meta: '3 sets × 10 reps • 25 kg EZ Bar', calBurn: 70 },
+    { id: 'tricep_dips', name: 'Parallel Bar Dips', muscle: 'triceps', muscleTag: 'Triceps & Chest', meta: '3 sets × 10 reps • Bodyweight', calBurn: 80 },
 
-  // Exercise Checklists & Set Bubbles
-  const exerciseCards = document.querySelectorAll('.exercise-item-card');
-  function updateChecklistCount() {
-    const doneCards = document.querySelectorAll('.exercise-item-card.completed').length;
-    checklistCountEl.textContent = `${doneCards} of ${exerciseCards.length} Completed`;
+    // BACK
+    { id: 'deadlift', name: 'Barbell Deadlifts', muscle: 'back', muscleTag: 'Lower Back & Glutes', meta: '3 sets × 10 reps • 90 kg', calBurn: 180 },
+    { id: 'lat_pulldown', name: 'Wide-Grip Lat Pulldown', muscle: 'back', muscleTag: 'Lats & Upper Back', meta: '3 sets × 10 reps • 55 kg cable', calBurn: 90 },
+    { id: 'bent_over_row', name: 'Bent-Over Barbell Rows', muscle: 'back', muscleTag: 'Mid Back & Rhomboids', meta: '3 sets × 10 reps • 55 kg', calBurn: 110 },
+    { id: 'seated_cable_row', name: 'Seated Cable Rows', muscle: 'back', muscleTag: 'Lats & Rhomboids', meta: '3 sets × 10 reps • 50 kg cable', calBurn: 85 },
+
+    // CHEST
+    { id: 'bench_press', name: 'Barbell Bench Press', muscle: 'chest', muscleTag: 'Chest & Front Delts', meta: '3 sets × 10 reps • 70 kg', calBurn: 130 },
+    { id: 'incline_db_press', name: 'Incline Dumbbell Press', muscle: 'chest', muscleTag: 'Upper Chest', meta: '3 sets × 10 reps • 24 kg dumbbells', calBurn: 115 },
+    { id: 'cable_flyes', name: 'Cable Chest Flyes', muscle: 'chest', muscleTag: 'Chest Inner Pecs', meta: '3 sets × 10 reps • 20 kg per side', calBurn: 80 },
+
+    // LEGS
+    { id: 'squats', name: 'Barbell Back Squats', muscle: 'legs', muscleTag: 'Quads & Glutes', meta: '3 sets × 10 reps • 75 kg', calBurn: 160 },
+    { id: 'leg_press', name: 'Incline Leg Press', muscle: 'legs', muscleTag: 'Quads & Hamstrings', meta: '3 sets × 10 reps • 140 kg', calBurn: 135 },
+    { id: 'lunges', name: 'Walking Dumbbell Lunges', muscle: 'legs', muscleTag: 'Legs & Balance', meta: '3 sets × 10 reps • 14 kg dumbbells', calBurn: 120 },
+    { id: 'rdl', name: 'Romanian Deadlifts', muscle: 'legs', muscleTag: 'Hamstrings & Glutes', meta: '3 sets × 10 reps • 70 kg', calBurn: 140 },
+    { id: 'calves', name: 'Standing Calf Raises', muscle: 'legs', muscleTag: 'Calves & Ankles', meta: '3 sets × 15 reps • 40 kg machine', calBurn: 50 },
+
+    // SHOULDERS
+    { id: 'oh_press', name: 'Overhead Dumbbell Press', muscle: 'shoulders', muscleTag: 'Front & Side Delts', meta: '3 sets × 10 reps • 18 kg dumbbells', calBurn: 95 },
+    { id: 'lateral_raises', name: 'Dumbbell Lateral Raises', muscle: 'shoulders', muscleTag: 'Side Delts', meta: '3 sets × 12 reps • 10 kg dumbbells', calBurn: 55 },
+    { id: 'face_pulls', name: 'Cable Face Pulls', muscle: 'shoulders', muscleTag: 'Rear Delts & Rotator Cuff', meta: '3 sets × 12 reps • 25 kg cable', calBurn: 60 },
+
+    // ABS
+    { id: 'crunches', name: 'Abdominal Crunches', muscle: 'abs', muscleTag: 'Upper Abs', meta: '3 sets × 15 reps • Bodyweight', calBurn: 45 },
+    { id: 'leg_raises', name: 'Hanging Leg Raises', muscle: 'abs', muscleTag: 'Lower Abs', meta: '3 sets × 12 reps • Bodyweight', calBurn: 55 },
+    { id: 'cable_woodchopper', name: 'Cable Woodchoppers', muscle: 'abs', muscleTag: 'Obliques & Core', meta: '3 sets × 12 reps • 20 kg cable', calBurn: 65 }
+  ];
+
+  let currentMuscleFilter = 'all';
+  let completedSetMap = {}; // "exId_setNum" -> true
+
+  const exerciseChecklistEl = document.getElementById('exerciseChecklist');
+  const heroActiveBurn = document.getElementById('heroActiveBurn');
+  const heroSelectedCount = document.getElementById('heroSelectedCount');
+  const heroWorkoutMins = document.getElementById('heroWorkoutMins');
+  const finishWorkoutBtn = document.getElementById('finishWorkoutBtn');
+
+  function calculateActiveWorkoutBurn() {
+    let totalBurn = 0;
+    let completedExCount = 0;
+    let totalSetsDone = 0;
+
+    exerciseLibrary.forEach(ex => {
+      let setsDone = 0;
+      for (let s = 1; s <= 3; s++) {
+        if (completedSetMap[`${ex.id}_${s}`]) {
+          setsDone++;
+          totalSetsDone++;
+        }
+      }
+      if (setsDone > 0) {
+        totalBurn += Math.round((setsDone / 3) * ex.calBurn);
+      }
+      if (setsDone === 3) {
+        completedExCount++;
+      }
+    });
+
+    return { totalBurn, completedExCount, totalSetsDone };
   }
 
-  exerciseCards.forEach(card => {
-    const checkBtn = card.querySelector('.checkbox-circle');
-    const setBubbles = card.querySelectorAll('.set-bubble');
+  function updateWorkoutHeroUI() {
+    const { totalBurn, completedExCount } = calculateActiveWorkoutBurn();
+    state.activeBurned = totalBurn;
 
-    // Checkbox toggle
-    checkBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isDone = card.classList.toggle('completed');
-      checkBtn.classList.toggle('checked', isDone);
+    if (heroActiveBurn) heroActiveBurn.textContent = `${totalBurn} kcal burned today`;
+    if (heroSelectedCount) heroSelectedCount.textContent = `${completedExCount} ${completedExCount === 1 ? 'exercise' : 'exercises'}`;
 
-      setBubbles.forEach(b => {
-        if (isDone) {
-          b.classList.add('done');
-          b.classList.remove('active');
-        } else {
-          b.classList.remove('done', 'active');
-        }
-      });
-      updateChecklistCount();
+    if (checklistCountEl) {
+      const visibleCards = document.querySelectorAll('.exercise-item-card');
+      const visibleCompleted = document.querySelectorAll('.exercise-item-card.completed').length;
+      checklistCountEl.textContent = `${visibleCompleted} of ${visibleCards.length} Completed`;
+    }
+
+    updateOverviewMetrics();
+    if (typeof updateMacroRings === 'function') updateMacroRings();
+  }
+
+  function renderExerciseChecklist() {
+    if (!exerciseChecklistEl) return;
+    const filtered = exerciseLibrary.filter(ex => {
+      if (currentMuscleFilter === 'all') return true;
+      return ex.muscle.toLowerCase() === currentMuscleFilter.toLowerCase();
     });
 
-    // Individual set bubbles
-    setBubbles.forEach((bubble) => {
+    exerciseChecklistEl.innerHTML = filtered.map(ex => {
+      const s1 = !!completedSetMap[`${ex.id}_1`];
+      const s2 = !!completedSetMap[`${ex.id}_2`];
+      const s3 = !!completedSetMap[`${ex.id}_3`];
+      const isExCompleted = s1 && s2 && s3;
+
+      return `
+        <div class="card exercise-item-card ${isExCompleted ? 'completed' : ''}" data-id="${ex.id}" data-muscle="${ex.muscle}">
+          <div class="exercise-card-header" style="cursor: pointer;">
+            <button type="button" class="checkbox-circle ${isExCompleted ? 'checked' : ''}" data-id="${ex.id}" aria-label="Toggle ${ex.name}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </button>
+            <div class="exercise-info" style="flex:1; min-width:0;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px;">
+                <h3 class="exercise-title ${isExCompleted ? 'completed strikethrough' : ''}" style="margin:0; ${isExCompleted ? 'text-decoration: line-through !important; opacity: 0.6; color: var(--text-muted) !important;' : ''}">${ex.name}</h3>
+                <span class="tag-pill-lime" style="font-size:10px; padding:2px 6px;">${ex.calBurn} kcal</span>
+              </div>
+              <p class="exercise-meta" style="margin-top:2px;">${ex.meta} • <span style="color:var(--scanner-purple); font-weight:600;">${ex.muscleTag}</span></p>
+            </div>
+          </div>
+          <div class="sets-bubble-row">
+            <span class="set-bubble ${s1 ? 'done active' : ''}" data-id="${ex.id}" data-set="1">Set 1: 10 reps</span>
+            <span class="set-bubble ${s2 ? 'done active' : ''}" data-id="${ex.id}" data-set="2">Set 2: 10 reps</span>
+            <span class="set-bubble ${s3 ? 'done active' : ''}" data-id="${ex.id}" data-set="3">Set 3: 10 reps</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    function toggleExerciseComplete(exId, shouldComplete) {
+      completedSetMap[`${exId}_1`] = shouldComplete;
+      completedSetMap[`${exId}_2`] = shouldComplete;
+      completedSetMap[`${exId}_3`] = shouldComplete;
+
+      renderExerciseChecklist();
+      updateWorkoutHeroUI();
+
+      let curUser = null;
+      try {
+        curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+      } catch (e) {}
+      if (curUser && curUser.email) saveUserData(curUser.email);
+    }
+
+    // Attach Checkbox Circle handlers
+    exerciseChecklistEl.querySelectorAll('.checkbox-circle').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const exId = btn.dataset.id;
+        const card = btn.closest('.exercise-item-card');
+        const isDone = !card.classList.contains('completed');
+        toggleExerciseComplete(exId, isDone);
+      });
+    });
+
+    // Attach Exercise Header / Info handlers so clicking anywhere on the exercise card header toggles it
+    exerciseChecklistEl.querySelectorAll('.exercise-info').forEach(info => {
+      info.addEventListener('click', (e) => {
+        const card = info.closest('.exercise-item-card');
+        const exId = card.dataset.id;
+        const isDone = !card.classList.contains('completed');
+        toggleExerciseComplete(exId, isDone);
+      });
+    });
+
+    // Attach Set Bubble handlers
+    exerciseChecklistEl.querySelectorAll('.set-bubble').forEach(bubble => {
       bubble.addEventListener('click', (e) => {
         e.stopPropagation();
-        bubble.classList.toggle('done');
-        const allDone = Array.from(setBubbles).every(b => b.classList.contains('done'));
-        card.classList.toggle('completed', allDone);
-        checkBtn.classList.toggle('checked', allDone);
-        updateChecklistCount();
+        const exId = bubble.dataset.id;
+        const setNum = bubble.dataset.set;
+        const key = `${exId}_${setNum}`;
+
+        completedSetMap[key] = !completedSetMap[key];
+
+        renderExerciseChecklist();
+        updateWorkoutHeroUI();
+
+        let curUser = null;
+        try {
+          curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+        } catch (e) {}
+        if (curUser && curUser.email) saveUserData(curUser.email);
       });
     });
+
+    updateWorkoutHeroUI();
+  }
+
+  // Muscle Filter Chips Click Handlers
+  const activeFilterBadge = document.getElementById('activeFilterBadge');
+  const muscleChips = document.querySelectorAll('.muscle-chip');
+  muscleChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      muscleChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentMuscleFilter = chip.dataset.muscle || 'all';
+      if (activeFilterBadge) {
+        activeFilterBadge.textContent = chip.textContent.trim();
+      }
+      renderExerciseChecklist();
+      chip.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+    });
   });
+
+  // Finish Workout Action Button
+  if (finishWorkoutBtn) {
+    finishWorkoutBtn.addEventListener('click', () => {
+      const { totalBurn } = calculateActiveWorkoutBurn();
+      state.activeBurned = totalBurn;
+
+      updateMacroRings();
+      updateOverviewMetrics();
+
+      let curUser = null;
+      try {
+        curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+      } catch (e) {}
+      if (curUser && curUser.email) saveUserData(curUser.email);
+
+      showToast(`🎉 Workout Finished! Logged ${totalBurn} active kcal burned to Overview!`);
+      switchTab('tabOverview');
+    });
+  }
 
   // Overview Period Switcher (Today vs This Week)
   const overviewPeriodTabs = document.querySelectorAll('.period-tab');
@@ -1130,42 +1468,153 @@ document.addEventListener('DOMContentLoaded', () => {
   const metricSleepTitle = document.getElementById('metricSleepTitle');
   const metricSleepSub = document.getElementById('metricSleepSub');
 
+  const weekNavigatorBar = document.getElementById('weekNavigatorBar');
+  const prevWeekBtn = document.getElementById('prevWeekBtn');
+  const nextWeekBtn = document.getElementById('nextWeekBtn');
+  const overviewWeekRangeText = document.getElementById('overviewWeekRangeText');
+
   let currentOverviewPeriod = 'today';
+  let overviewWeekOffset = 0; // 0 = This Week, 1 = Next Week, -1 = Prev Week
+
+  function getWeekDateRangeString(offset = 0) {
+    const today = new Date();
+    const day = today.getDay();
+    const diffToMonday = (day === 0 ? -6 : 1 - day) + (offset * 7);
+
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diffToMonday);
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const monStr = `${monthNames[monday.getMonth()]} ${monday.getDate()}`;
+    const sunStr = `${monthNames[sunday.getMonth()]} ${sunday.getDate()}`;
+
+    let labelPrefix = 'THIS WEEK';
+    if (offset === 1) labelPrefix = 'NEXT WEEK';
+    else if (offset > 1) labelPrefix = `NEXT WEEK +${offset}`;
+    else if (offset === -1) labelPrefix = 'PREV WEEK';
+    else if (offset < -1) labelPrefix = `PAST WEEK ${offset}`;
+
+    return `${labelPrefix} (${monStr} - ${sunStr})`;
+  }
 
   function updateOverviewMetrics() {
-    const isZeroUser = state.consumedCalories === 0 && (state.activeBurned || 0) === 0;
+    const activeBurn = state.activeBurned || 0;
+    const isZeroUser = state.consumedCalories === 0 && activeBurn === 0;
+
+    // 1. Instantly update Daily Energy Balance Card (Top of Overview)
+    const overviewConsumed = document.getElementById('overviewConsumed');
+    const overviewBurned = document.getElementById('overviewBurned');
+    const energyBalanceNet = document.getElementById('energyBalanceNet');
+    const balanceRatioConsumed = document.getElementById('balanceRatioConsumed');
+    const balanceRatioBurned = document.getElementById('balanceRatioBurned');
+
+    if (overviewConsumed) {
+      overviewConsumed.textContent = `${state.consumedCalories.toLocaleString()} kcal`;
+    }
+    if (overviewBurned) {
+      overviewBurned.textContent = `${activeBurn.toLocaleString()} kcal`;
+    }
+    if (energyBalanceNet) {
+      const net = state.consumedCalories - activeBurn;
+      energyBalanceNet.textContent = `${net > 0 ? '+' : ''}${net.toLocaleString()} kcal Net`;
+    }
+    if (balanceRatioConsumed && balanceRatioBurned) {
+      const total = state.consumedCalories + activeBurn;
+      const consumedRatio = total > 0 ? Math.round((state.consumedCalories / total) * 100) : 0;
+      balanceRatioConsumed.style.width = `${consumedRatio}%`;
+      balanceRatioBurned.style.width = `${total > 0 ? 100 - consumedRatio : 0}%`;
+    }
 
     if (currentOverviewPeriod === 'today') {
+      if (weekNavigatorBar) weekNavigatorBar.style.display = 'none';
       if (metricsGridHeading) metricsGridHeading.textContent = "Today's Health Metrics";
-      if (metricCaloriesVal) metricCaloriesVal.textContent = isZeroUser ? "0" : "2,180";
+      if (metricCaloriesVal) metricCaloriesVal.textContent = activeBurn.toLocaleString();
       if (metricCaloriesTitle) metricCaloriesTitle.textContent = "Calories Burned";
-      if (metricCaloriesSub) metricCaloriesSub.textContent = isZeroUser ? "0 active • 0 resting" : "540 active • 1,640 resting";
+      if (metricCaloriesSub) metricCaloriesSub.textContent = `${activeBurn.toLocaleString()} active kcal burned`;
 
-      if (metricStepsVal) metricStepsVal.textContent = isZeroUser ? "0" : "8,420";
-      if (metricStepsSub) metricStepsSub.textContent = isZeroUser ? "steps (0% of 10k goal)" : "steps (84% of 10k goal)";
+      // Today's Health Metrics (Dummy data reset to 0; Calories Burned dynamically tracks user activity)
+      if (metricStepsVal) metricStepsVal.textContent = "0";
+      if (metricStepsSub) metricStepsSub.textContent = "steps (0% of 10k goal)";
 
-      if (metricActiveMinsVal) metricActiveMinsVal.textContent = isZeroUser ? "0" : "48";
-      if (metricActiveMinsSub) metricActiveMinsSub.textContent = isZeroUser ? "min (0% of 45 min goal)" : "min (Goal 45 min reached)";
+      if (metricActiveMinsVal) metricActiveMinsVal.textContent = "0";
+      if (metricActiveMinsSub) metricActiveMinsSub.textContent = "min (0% of 45 min goal)";
 
-      if (metricSleepVal) metricSleepVal.textContent = isZeroUser ? "0h 0m" : "7h 35m";
+      if (metricSleepVal) metricSleepVal.textContent = "0h 0m";
       if (metricSleepTitle) metricSleepTitle.textContent = "Sleep Duration";
-      if (metricSleepSub) metricSleepSub.textContent = isZeroUser ? "No sleep recorded yet" : "Last night • 92% score";
+      if (metricSleepSub) metricSleepSub.textContent = "No sleep recorded yet";
     } else {
-      if (metricsGridHeading) metricsGridHeading.textContent = "Weekly Aggregate Metrics";
-      if (metricCaloriesVal) metricCaloriesVal.textContent = isZeroUser ? "0" : "10,820";
-      if (metricCaloriesTitle) metricCaloriesTitle.textContent = "Calories Burned";
-      if (metricCaloriesSub) metricCaloriesSub.textContent = isZeroUser ? "0 kcal / week total" : "kcal / week total";
+      if (weekNavigatorBar) weekNavigatorBar.style.display = 'flex';
+      if (overviewWeekRangeText) overviewWeekRangeText.textContent = getWeekDateRangeString(overviewWeekOffset);
 
-      if (metricStepsVal) metricStepsVal.textContent = isZeroUser ? "0" : "82,641";
-      if (metricStepsSub) metricStepsSub.textContent = isZeroUser ? "steps (0% of weekly goal)" : "steps (82% of weekly goal)";
+      if (overviewWeekOffset === 0) {
+        if (metricsGridHeading) metricsGridHeading.textContent = "This Week's Aggregate Metrics";
+        if (metricCaloriesVal) metricCaloriesVal.textContent = activeBurn.toLocaleString();
+        if (metricCaloriesTitle) metricCaloriesTitle.textContent = "Calories Burned";
+        if (metricCaloriesSub) metricCaloriesSub.textContent = `${activeBurn.toLocaleString()} active kcal this week`;
 
-      if (metricActiveMinsVal) metricActiveMinsVal.textContent = isZeroUser ? "0" : "558";
-      if (metricActiveMinsSub) metricActiveMinsSub.textContent = isZeroUser ? "min / weekly total" : "min / weekly total";
+        let curUser = null;
+        try {
+          curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+        } catch (e) {}
+        const isDemo = curUser && curUser.email === 'alex.rivera@wellness.io';
 
-      if (metricSleepVal) metricSleepVal.textContent = isZeroUser ? "0h 0m" : "51h 36m";
-      if (metricSleepTitle) metricSleepTitle.textContent = "Weekly Sleep";
-      if (metricSleepSub) metricSleepSub.textContent = isZeroUser ? "No weekly sleep recorded" : "7h 22m daily avg";
+        if (metricStepsVal) metricStepsVal.textContent = isDemo ? "82,641" : "0";
+        if (metricStepsSub) metricStepsSub.textContent = isDemo ? "steps (82% of weekly goal)" : "steps (0% of weekly goal)";
+
+        if (metricActiveMinsVal) metricActiveMinsVal.textContent = isDemo ? "558" : "0";
+        if (metricActiveMinsSub) metricActiveMinsSub.textContent = isDemo ? "min / weekly total" : "min / weekly total";
+
+        if (metricSleepVal) metricSleepVal.textContent = isDemo ? "51h 36m" : "0h 0m";
+        if (metricSleepTitle) metricSleepTitle.textContent = "Weekly Sleep";
+        if (metricSleepSub) metricSleepSub.textContent = isDemo ? "7h 22m daily avg" : "No weekly sleep recorded";
+      } else if (overviewWeekOffset > 0) {
+        if (metricsGridHeading) metricsGridHeading.textContent = `Upcoming Week Forecast (+${overviewWeekOffset})`;
+        if (metricCaloriesVal) metricCaloriesVal.textContent = "0";
+        if (metricCaloriesTitle) metricCaloriesTitle.textContent = "Calories Burned";
+        if (metricCaloriesSub) metricCaloriesSub.textContent = "Target 16,100 kcal • 0 logged yet";
+
+        if (metricStepsVal) metricStepsVal.textContent = "0";
+        if (metricStepsSub) metricStepsSub.textContent = "steps (Target: 70,000 steps)";
+
+        if (metricActiveMinsVal) metricActiveMinsVal.textContent = "0";
+        if (metricActiveMinsSub) metricActiveMinsSub.textContent = "min (Target: 315 active min)";
+
+        if (metricSleepVal) metricSleepVal.textContent = "0h 0m";
+        if (metricSleepTitle) metricSleepTitle.textContent = "Weekly Sleep";
+        if (metricSleepSub) metricSleepSub.textContent = "Target: 56h 0m total sleep";
+      } else {
+        if (metricsGridHeading) metricsGridHeading.textContent = `Previous Week (${overviewWeekOffset}) Summary`;
+        if (metricCaloriesVal) metricCaloriesVal.textContent = "15,840";
+        if (metricCaloriesTitle) metricCaloriesTitle.textContent = "Calories Burned";
+        if (metricCaloriesSub) metricCaloriesSub.textContent = "4,360 active • 11,480 resting";
+
+        if (metricStepsVal) metricStepsVal.textContent = "76,420";
+        if (metricStepsSub) metricStepsSub.textContent = "steps (109% of weekly goal)";
+
+        if (metricActiveMinsVal) metricActiveMinsVal.textContent = "490";
+        if (metricActiveMinsSub) metricActiveMinsSub.textContent = "min (Goal 315 min exceeded)";
+
+        if (metricSleepVal) metricSleepVal.textContent = "49h 45m";
+        if (metricSleepTitle) metricSleepTitle.textContent = "Weekly Sleep";
+        if (metricSleepSub) metricSleepSub.textContent = "7h 06m daily avg • 89% score";
+      }
     }
+  }
+
+  if (prevWeekBtn) {
+    prevWeekBtn.addEventListener('click', () => {
+      overviewWeekOffset--;
+      updateOverviewMetrics();
+    });
+  }
+  if (nextWeekBtn) {
+    nextWeekBtn.addEventListener('click', () => {
+      overviewWeekOffset++;
+      updateOverviewMetrics();
+    });
   }
 
   overviewPeriodTabs.forEach(tab => {
@@ -1173,9 +1622,13 @@ document.addEventListener('DOMContentLoaded', () => {
       overviewPeriodTabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentOverviewPeriod = tab.dataset.period;
+      if (currentOverviewPeriod === 'week') overviewWeekOffset = 0;
       updateOverviewMetrics();
     });
   });
+
+  // Initial render of exercise checklist (now safely after Overview variables are declared)
+  renderExerciseChecklist();
 
   // Profile Slider
   if (targetSlider) {
@@ -1221,9 +1674,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const socialBtns = document.querySelectorAll('.social-btn');
 
+  const screenViewport = document.querySelector('.screen-viewport');
+
   function showAuthView(viewName) {
-    if (authContainer) authContainer.style.display = 'flex';
-    if (bottomNavBar) bottomNavBar.style.display = 'none';
+    if (screenViewport) {
+      screenViewport.style.setProperty('display', 'none', 'important');
+    }
+    if (authContainer) {
+      authContainer.style.setProperty('display', 'flex', 'important');
+      authContainer.style.setProperty('z-index', '9999', 'important');
+    }
+    if (bottomNavBar) {
+      bottomNavBar.style.setProperty('display', 'none', 'important');
+    }
 
     if (viewIntro) viewIntro.classList.remove('active');
     if (viewLogin) viewLogin.classList.remove('active');
@@ -1239,8 +1702,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function enterAppFromAuth() {
-    if (authContainer) authContainer.style.display = 'none';
-    if (bottomNavBar) bottomNavBar.style.display = 'flex';
+    if (authContainer) {
+      authContainer.style.setProperty('display', 'none', 'important');
+    }
+    if (screenViewport) {
+      screenViewport.style.setProperty('display', 'block', 'important');
+    }
+    if (bottomNavBar) {
+      bottomNavBar.style.setProperty('display', 'flex', 'important');
+    }
     switchTab('tabNutrition');
   }
 
@@ -1367,7 +1837,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==================== DATA MANAGEMENT & USER STATE ====================
 
   // Reset all tracked daily metrics to 0 (for newly registered & fresh users)
-  function resetUserDataToZero() {
+  function resetUserDataToZero(shouldPersist = false) {
     const todayStr = getTodayDateString();
     state.currentDate = todayStr;
     state.waterDate = todayStr;
@@ -1424,20 +1894,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 4. Workout Checklists & Set Bubbles
-    if (checklistCountEl) checklistCountEl.textContent = '0 of 4 Completed';
-    const exerciseCards = document.querySelectorAll('.exercise-item-card');
-    exerciseCards.forEach(card => {
-      card.classList.remove('completed');
-      const checkBtn = card.querySelector('.checkbox-circle');
-      if (checkBtn) checkBtn.classList.remove('checked');
-      const setBubbles = card.querySelectorAll('.set-bubble');
-      setBubbles.forEach(b => b.classList.remove('done', 'active'));
-    });
+    completedSetMap = {};
+    renderExerciseChecklist();
+    updateWorkoutHeroUI();
 
     // 5. Overview Tab Data
     updateOverviewMetrics();
     const histBars = document.querySelectorAll('.histogram-bars .bar-fill');
     histBars.forEach(b => b.style.height = '4px');
+
+    if (shouldPersist && curUser && curUser.email) {
+      saveUserData(curUser.email);
+    }
   }
 
   // Restore pre-seeded demo state (only for alex.rivera@wellness.io)
@@ -1520,16 +1988,15 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
     }
 
-    if (checklistCountEl) checklistCountEl.textContent = '1 of 4 Completed';
-    const squatsCard = document.querySelector('.exercise-item-card[data-id="squats"]');
-    if (squatsCard) {
-      squatsCard.classList.add('completed');
-      const checkBtn = squatsCard.querySelector('.checkbox-circle');
-      if (checkBtn) checkBtn.classList.add('checked');
-      const bubbles = squatsCard.querySelectorAll('.set-bubble');
-      bubbles.forEach(b => b.classList.add('done'));
-    }
+    completedSetMap = {
+      'squats_1': true,
+      'squats_2': true,
+      'squats_3': true
+    };
+    renderExerciseChecklist();
+    updateWorkoutHeroUI();
 
+    ensureDeleteButtonsInMealLists();
     updateOverviewMetrics();
     const heights = ['65%', '80%', '60%', '95%', '75%', '85%', '50%'];
     const barFills = document.querySelectorAll('.histogram-bars .bar-fill');
@@ -1557,6 +2024,7 @@ document.addEventListener('DOMContentLoaded', () => {
       fats: state.fats,
       fiber: state.fiber,
       activeBurned: state.activeBurned,
+      completedSetMap: completedSetMap || {},
       snackCalories: state.snackCalories || 0,
       breakfastCalories: state.breakfastCalories || 0,
       lunchCalories: state.lunchCalories || 0,
@@ -1578,26 +2046,12 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentDate = todayStr;
 
     if (email === 'alex.rivera@wellness.io') {
-      loadDemoData();
       const saved = localStorage.getItem('fittrack_data_' + email);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          const savedWaterDate = parsed.waterDate || parsed.date;
-          if (savedWaterDate && savedWaterDate !== todayStr) {
-            state.waterIntake = 0;
-            state.waterDate = todayStr;
-            updateWater();
-            saveUserData(email);
-          } else if (parsed.waterIntake !== undefined) {
-            state.waterIntake = parsed.waterIntake;
-            state.waterDate = savedWaterDate || todayStr;
-            updateWater();
-          }
-        } catch (e) {}
+      if (!saved) {
+        loadDemoData();
+        updateDateDisplay();
+        return;
       }
-      updateDateDisplay();
-      return;
     }
 
     let curUser = null;
@@ -1623,26 +2077,60 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const parsed = JSON.parse(saved);
 
-        // Check if saved hydration was from a previous calendar day
+        // Check if saved data was from a previous calendar day
         const savedWaterDate = parsed.waterDate || parsed.date;
         const isNewDay = savedWaterDate && savedWaterDate !== todayStr;
 
         if (isNewDay) {
-          console.log(`[FitTrack] New day detected (${todayStr}, last record was ${savedWaterDate}). Resetting hydration count to 0 ml.`);
+          console.log(`[FitTrack] New day detected (${todayStr}, last record was ${savedWaterDate}). Resetting calories, macros, and hydration count to 0.`);
           state.waterIntake = 0;
           state.waterDate = todayStr;
-        } else {
-          state.waterIntake = parsed.waterIntake || 0;
-          state.waterDate = savedWaterDate || todayStr;
-        }
+          state.consumedCalories = 0;
+          state.carbs = 0;
+          state.protein = 0;
+          state.fats = 0;
+          state.fiber = 0;
+          state.activeBurned = 0;
+          state.snackCalories = 0;
+          state.breakfastCalories = 0;
+          state.lunchCalories = 0;
+          state.dinnerCalories = 0;
 
-        // If saved data didn't have waterDate, ensure it's saved now
-        if (!parsed.waterDate) {
+          if (!curUser?.nutritionTargets?.targetCalories && parsed.targetCalories) {
+            state.targetCalories = parsed.targetCalories;
+          }
+          if (!curUser?.nutritionTargets?.targetWater && parsed.waterTarget) {
+            state.waterTarget = parsed.waterTarget;
+          }
+
+          updateMacroRings();
+          updateWater();
+          updateMealSummaries();
+
+          const breakfastItemList = document.getElementById('breakfastItemList');
+          const lunchItemList = document.getElementById('lunchItemList');
+
+          if (breakfastItemList) {
+            breakfastItemList.innerHTML = '<li class="meal-empty-note">No breakfast logged yet today. Tap + to add food.</li>';
+          }
+          if (lunchItemList) {
+            lunchItemList.innerHTML = '<li class="meal-empty-note">No lunch logged yet today. Tap + to add food.</li>';
+          }
+          if (snackItemList) {
+            snackItemList.innerHTML = '<li class="meal-empty-note">No snacks logged yet today. Tap + to add food.</li>';
+          }
+
+          updateOverviewMetrics();
+          updateDateDisplay();
           saveUserData(email);
+          return;
         }
 
+        // Same day: restore today's logged state
+        state.waterIntake = parsed.waterIntake || 0;
+        state.waterDate = savedWaterDate || todayStr;
         state.consumedCalories = parsed.consumedCalories || 0;
-        // Only fallback to cached target if user profile targets are absent
+
         if (!curUser?.nutritionTargets?.targetCalories && parsed.targetCalories) {
           state.targetCalories = parsed.targetCalories;
         }
@@ -1654,6 +2142,22 @@ document.addEventListener('DOMContentLoaded', () => {
           state.waterTarget = parsed.waterTarget;
         }
         state.activeBurned = parsed.activeBurned || 0;
+        completedSetMap = parsed.completedSetMap || {};
+
+        // Auto-recover completed exercise if activeBurned was recorded previously without completed sets in map
+        const hasCompletedSets = Object.values(completedSetMap).some(v => !!v);
+        if (state.activeBurned > 0 && !hasCompletedSets) {
+          const matched = exerciseLibrary.find(e => e.calBurn === state.activeBurned);
+          if (matched) {
+            completedSetMap[`${matched.id}_1`] = true;
+            completedSetMap[`${matched.id}_2`] = true;
+            completedSetMap[`${matched.id}_3`] = true;
+          }
+        }
+
+        renderExerciseChecklist();
+        updateWorkoutHeroUI();
+
         state.snackCalories = parsed.snackCalories || 0;
         state.breakfastCalories = parsed.breakfastCalories || 0;
         state.lunchCalories = parsed.lunchCalories || 0;
@@ -1684,13 +2188,9 @@ document.addEventListener('DOMContentLoaded', () => {
           snackItemList.innerHTML = '<li class="meal-empty-note">No snacks logged yet today. Tap + to add food.</li>';
         }
 
+        ensureDeleteButtonsInMealLists();
         updateOverviewMetrics();
         updateDateDisplay();
-
-        // If it was a new day, immediately save the reset state
-        if (isNewDay) {
-          saveUserData(email);
-        }
         return;
       } catch (e) {
         console.warn('Failed parsing saved user data', e);
@@ -2934,29 +3434,79 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load Google OAuth 2.0 configuration on startup
   fetchGoogleOAuthConfig();
 
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', async () => {
-      const token = localStorage.getItem('fittrack_token');
-      if (token) {
-        try {
-          await fetch('/api/auth/logout', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + token }
-          });
-        } catch (err) {
-          console.warn('Logout API error:', err);
-        }
-      }
+  const headerLogoutBtn = document.getElementById('headerLogoutBtn');
+
+  function performUserLogout(e) {
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+
+    console.log('[FitTrack] Instant user logout initiated...');
+
+    // 1. Background non-blocking API call
+    const token = localStorage.getItem('fittrack_token');
+    if (token) {
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token }
+      }).catch(err => console.warn('Logout API error:', err));
+    }
+
+    // 2. Instant client-side session cleanup (preserve fittrack_data_<email>)
+    try {
       localStorage.removeItem('fittrack_token');
       localStorage.removeItem('fittrack_user');
-      resetUserDataToZero();
-      showAuthView('login');
-    });
+      localStorage.removeItem('fittrack_simulated_date');
+    } catch (err) {}
+
+    resetUserDataToZero(false);
+
+    const loginEmailInput = document.getElementById('loginEmail');
+    const loginPasswordInput = document.getElementById('loginPassword');
+    if (loginEmailInput) loginEmailInput.value = '';
+    if (loginPasswordInput) loginPasswordInput.value = '';
+
+    // 3. Instant UI transition to Login / Intro
+    showToast('🔒 Logged out successfully!');
+    showAuthView('login');
   }
+
+  // Expose globally for inline onclick attributes
+  window.performUserLogout = performUserLogout;
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', performUserLogout);
+  }
+  if (headerLogoutBtn) {
+    headerLogoutBtn.addEventListener('click', performUserLogout);
+  }
+
+  // Delegated click listener fallback to guarantee logout button click capture
+  document.addEventListener('click', (e) => {
+    const target = e.target.closest('#logoutBtn, .logout-btn, #headerLogoutBtn, .header-logout-btn');
+    if (target) {
+      performUserLogout(e);
+    }
+  });
 
   // Simulation of Day Rollover for Testing & Verification
   const simulateNextDayBtn = document.getElementById('simulateNextDayBtn');
   const resetSimulatedDayBtn = document.getElementById('resetSimulatedDayBtn');
+  const resetDailyCaloriesBtn = document.getElementById('resetDailyCaloriesBtn');
+  const cardResetCaloriesBtn = document.getElementById('cardResetCaloriesBtn');
+
+  function resetTodayCaloriesToZero() {
+    resetUserDataToZero();
+    showToast('🔄 Reset today\'s calories, macros & meal logs to 0!');
+  }
+
+  if (resetDailyCaloriesBtn) {
+    resetDailyCaloriesBtn.addEventListener('click', resetTodayCaloriesToZero);
+  }
+  if (cardResetCaloriesBtn) {
+    cardResetCaloriesBtn.addEventListener('click', resetTodayCaloriesToZero);
+  }
 
   function simulateNextDay() {
     const currentSim = getTodayDateString();
@@ -2971,16 +3521,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     localStorage.setItem('fittrack_simulated_date', nextDateStr);
 
-    // Trigger rollover and reset hydration
-    checkDayRollover();
+    // Force rollover and reset calories & hydration
+    resetUserDataToZero();
+    state.currentDate = nextDateStr;
+    state.waterDate = nextDateStr;
+    updateDateDisplay();
+
+    let curUser = null;
+    try {
+      curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+    } catch(e) {}
+    if (curUser && curUser.email) {
+      saveUserData(curUser.email);
+    }
 
     const displayStr = formatDisplayDate(nextDateStr);
-    showToast(`☀️ Day advanced to ${displayStr}! Hydration reset to 0 ml.`);
+    showToast(`☀️ Day advanced to ${displayStr}! Calories & hydration reset to 0.`);
   }
 
   function resetSimulatedDate() {
     localStorage.removeItem('fittrack_simulated_date');
-    checkDayRollover();
+    resetUserDataToZero();
     const displayStr = formatDisplayDate(getTodayDateString());
     showToast(`🔄 Restored actual date: ${displayStr}`);
   }
@@ -2996,6 +3557,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.FitTrackApp = {
     simulateNextDay,
     resetSimulatedDate,
+    resetTodayCaloriesToZero,
     checkDayRollover,
     getWaterIntake: () => state.waterIntake,
     getWaterDate: () => state.waterDate,

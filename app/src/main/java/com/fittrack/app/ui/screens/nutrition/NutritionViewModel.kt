@@ -50,12 +50,20 @@ class NutritionViewModel @Inject constructor() : ViewModel() {
 
     fun checkDayRollover() {
         val today = java.time.LocalDate.now().toString()
-        if (_uiState.value.waterDate != today) {
+        if (_uiState.value.waterDate != today || _uiState.value.currentDate != today) {
             _uiState.update {
                 it.copy(
                     currentDate = today,
                     waterDate = today,
-                    waterIntakeMl = 0
+                    consumedCalories = 0,
+                    carbsGrams = 0,
+                    proteinGrams = 0,
+                    fatsGrams = 0,
+                    waterIntakeMl = 0,
+                    breakfastItems = emptyList(),
+                    lunchItems = emptyList(),
+                    dinnerItems = emptyList(),
+                    snackItems = emptyList()
                 )
             }
         }

@@ -55,4 +55,14 @@ class OverviewViewModel @Inject constructor() : ViewModel() {
     fun setPeriod(period: OverviewPeriod) {
         _uiState.update { it.copy(selectedPeriod = period) }
     }
+
+    fun updateActiveCalories(burnedCalories: Int) {
+        _uiState.update {
+            val resting = 1640
+            it.copy(
+                todayActiveCalories = burnedCalories,
+                todayCaloriesBurned = resting + burnedCalories
+            )
+        }
+    }
 }
