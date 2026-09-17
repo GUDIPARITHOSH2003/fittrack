@@ -11,5 +11,33 @@
       "fiber": 1,
       "createdAt": 1789474697778
     }
+  ],
+  "audit_login_1789637899506@wellness.io": [
+    {
+      "id": "fav_1789637899536_wlwax",
+      "name": "Salmon & Quinoa Bowl",
+      "portion": "1 bowl (400g)",
+      "calories": 520,
+      "protein": 42,
+      "carbs": 48,
+      "fats": 0,
+      "fiber": 0,
+      "createdAt": 1789637899536
+    }
+  ],
+  "usr_1789638113962_8e8euo": [],
+  "usr_1789638714956_mcv9hi": [
+    {
+      "id": "fav_1789638714971_2gyshz",
+      "userId": "usr_1789638714956_mcv9hi",
+      "name": "Grilled Salmon Bowl",
+      "calories": 520,
+      "protein": 42,
+      "carbs": 38,
+      "fat": 18,
+      "portion": "1 bowl (350g)",
+      "mealType": "dinner",
+      "createdAt": 1789638714971
+    }
   ]
 }

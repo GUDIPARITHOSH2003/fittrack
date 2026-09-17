@@ -1,0 +1,84 @@
+[
+  {
+    "id": "log_usr_1789638113962_8e8euo_2026-09-17",
+    "userId": "usr_1789638113962_8e8euo",
+    "date": "2026-09-17",
+    "consumedCalories": 1850,
+    "carbs": 190,
+    "protein": 145,
+    "fats": 55,
+    "fiber": 28,
+    "waterIntake": 2000,
+    "waterTarget": 2800,
+    "activeBurned": 350,
+    "meals": [
+      {
+        "name": "Oatmeal",
+        "calories": 350
+      }
+    ],
+    "completedExercises": {
+      "squats_1": true,
+      "squats_2": true
+    },
+    "updatedAt": 1789638113965
+  },
+  {
+    "id": "log_usr_1789638394905_sbhde7_2026-09-17",
+    "userId": "usr_1789638394905_sbhde7",
+    "date": "2026-09-17",
+    "consumedCalories": 1950,
+    "carbs": 210,
+    "protein": 155,
+    "fats": 60,
+    "fiber": 30,
+    "waterIntake": 2250,
+    "waterTarget": 2600,
+    "activeBurned": 420,
+    "meals": [
+      {
+        "name": "Oatmeal & Berries",
+        "calories": 420,
+        "protein": 18,
+        "mealType": "breakfast"
+      },
+      {
+        "name": "Chicken Quinoa Bowl",
+        "calories": 650,
+        "protein": 55,
+        "mealType": "lunch"
+      }
+    ],
+    "completedExercises": {
+      "squats_1": true,
+      "squats_2": true,
+      "bench_1": true
+    },
+    "updatedAt": 1789638394917
+  },
+  {
+    "id": "log_usr_1789638714956_mcv9hi_2026-09-17",
+    "userId": "usr_1789638714956_mcv9hi",
+    "date": "2026-09-17",
+    "consumedCalories": 2150,
+    "carbs": 230,
+    "protein": 160,
+    "fats": 65,
+    "fiber": 32,
+    "waterIntake": 2000,
+    "waterTarget": 3000,
+    "activeBurned": 450,
+    "meals": {
+      "breakfastCalories": 650,
+      "lunchCalories": 850,
+      "dinnerCalories": 650,
+      "snackCalories": 0,
+      "breakfastHtml": "<li class=\"meal-item\"><div class=\"item-title\">Oatmeal & Whey</div><span class=\"item-cal\">650 kcal</span></li>"
+    },
+    "completedExercises": {
+      "bench_press_1": true,
+      "bench_press_2": true
+    },
+    "updatedAt": 1789638714963
+  }
+]

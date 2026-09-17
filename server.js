@@ -4,6 +4,34 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+// Load .env configuration if present
+try {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    envContent.split(/\r?\n/).forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx !== -1) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    });
+  }
+} catch (e) {
+  console.warn('Could not read .env file:', e.message);
+}
+
+const db = require('./db/index.js');
+
 const PORT = process.env.PORT || 8080;
 const DATA_FILE = path.join(__dirname, 'data', 'users.json');
 const GOOGLE_CONFIG_FILE = path.join(__dirname, 'data', 'google-config.json');
@@ -126,12 +154,12 @@ function calculateNutritionTargets(weightKg, heightCm, age, gymFrequency, goal) 
   const bmr = Math.round(10 * weight + 6.25 * height - 5 * userAge + 5);
 
   let multiplier = 1.2;
-  const freq = (gymFrequency || '').toLowerCase();
-  if (freq.includes('6-7') || freq.includes('athlete')) {
+  const freq = String(gymFrequency || '').toLowerCase();
+  if (freq.includes('6') || freq.includes('7') || freq.includes('athlete')) {
     multiplier = 1.725;
-  } else if (freq.includes('4-5') || freq.includes('active')) {
+  } else if (freq.includes('4') || freq.includes('5') || freq.includes('active')) {
     multiplier = 1.55;
-  } else if (freq.includes('2-3') || freq.includes('moderate')) {
+  } else if (freq.includes('2') || freq.includes('3') || freq.includes('moderate')) {
     multiplier = 1.375;
   } else {
     multiplier = 1.2; // 0-1 days / sedentary
@@ -143,7 +171,7 @@ function calculateNutritionTargets(weightKg, heightCm, age, gymFrequency, goal) 
   // - Weight Loss: 500 kcal deficit (or ~20% deficit, safe minimum 1200 kcal)
   // - Weight Gain: 500 kcal surplus (lean bulk)
   // - Maintain: 0 kcal adjustment (maintenance)
-  const normGoal = (goal || 'maintain').toLowerCase();
+  const normGoal = String(goal || 'maintain').toLowerCase();
   let targetCalories = maintenanceCalories;
   let proteinRatio = 0.30;
   let carbsRatio = 0.45;
@@ -366,11 +394,10 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { success: false, message: 'Password must be at least 6 characters long' });
       }
 
-      const users = getUsers();
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Duplicate Check
-      const existingUser = users.find(u => u.email.toLowerCase() === normalizedEmail);
+      // Duplicate Check via DB
+      const existingUser = await db.getUserByEmail(normalizedEmail);
       if (existingUser) {
         return sendJson(res, 409, { success: false, message: 'An account with this email already exists. Please log in.' });
       }
@@ -382,8 +409,8 @@ const server = http.createServer(async (req, res) => {
       const parsedAge = Math.min(Math.max(parseInt(age, 10) || 25, 12), 100);
       const parsedWeight = Math.min(Math.max(parseFloat(weight) || 68.5, 30.0), 300.0);
       const parsedHeight = Math.min(Math.max(parseFloat(height) || 175.0, 100.0), 250.0);
-      const selectedFrequency = gymFrequency || '4-5 days/wk';
-      const selectedGoal = goal || 'maintain';
+      const selectedFrequency = String(gymFrequency || '4-5 days/wk');
+      const selectedGoal = String(goal || 'maintain');
       const targets = calculateNutritionTargets(parsedWeight, parsedHeight, parsedAge, selectedFrequency, selectedGoal);
 
       const newUser = {
@@ -401,33 +428,32 @@ const server = http.createServer(async (req, res) => {
         createdAt: Date.now()
       };
 
-      users.push(newUser);
-      saveUsers(users);
+      const savedUser = await db.createUser(newUser);
 
       // Create session
       const token = generateToken();
       activeSessions.set(token, {
-        userId: newUser.id,
-        email: newUser.email,
+        userId: savedUser.id,
+        email: savedUser.email,
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
       });
 
-      console.log(`[API] Registered new user: ${newUser.name} (${newUser.email}) | Goal: ${targets.goalLabel} | Target: ${targets.targetCalories} kcal`);
+      console.log(`[API] Registered new user in DB: ${savedUser.name} (${savedUser.email}) | Goal: ${targets.goalLabel} | Target: ${targets.targetCalories} kcal`);
 
       return sendJson(res, 201, {
         success: true,
         message: 'Account created successfully',
         token: token,
         user: {
-          id: newUser.id,
-          name: newUser.name,
-          email: newUser.email,
-          age: newUser.age,
-          weight: newUser.weight,
-          height: newUser.height,
-          gymFrequency: newUser.gymFrequency,
-          goal: newUser.goal,
-          nutritionTargets: newUser.nutritionTargets
+          id: savedUser.id,
+          name: savedUser.name,
+          email: savedUser.email,
+          age: savedUser.age,
+          weight: savedUser.weight,
+          height: savedUser.height,
+          gymFrequency: savedUser.gymFrequency,
+          goal: savedUser.goal,
+          nutritionTargets: savedUser.nutritionTargets
         }
       });
     } catch (err) {
@@ -446,9 +472,8 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { success: false, message: 'Email and password are required' });
       }
 
-      const users = getUsers();
       const normalizedEmail = email.trim().toLowerCase();
-      const user = users.find(u => u.email.toLowerCase() === normalizedEmail);
+      const user = await db.getUserByEmail(normalizedEmail);
 
       if (!user || !user.passwordHash || !user.salt) {
         return sendJson(res, 401, { success: false, message: 'Invalid email or password' });
@@ -471,7 +496,14 @@ const server = http.createServer(async (req, res) => {
       const freshTargets = calculateNutritionTargets(user.weight, user.height, user.age, user.gymFrequency, effectiveGoal);
       user.nutritionTargets = freshTargets;
       user.goal = effectiveGoal;
-      saveUsers(users);
+      await db.updateUserProfile(user.id, {
+        weight: user.weight,
+        height: user.height,
+        age: user.age,
+        gymFrequency: user.gymFrequency,
+        goal: effectiveGoal,
+        nutritionTargets: freshTargets
+      });
 
       return sendJson(res, 200, {
         success: true,
@@ -496,25 +528,29 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 3. GET /api/auth/me (Current session)
-  if (pathname === '/api/auth/me' && req.method === 'GET') {
+  async function getAuthenticatedUser(req, queryParams = {}) {
     const authHeader = req.headers['authorization'] || '';
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-
-    if (!token || !activeSessions.has(token)) {
-      return sendJson(res, 401, { success: false, message: 'Unauthorized session' });
+    if (token && activeSessions.has(token)) {
+      const session = activeSessions.get(token);
+      if (Date.now() <= session.expiresAt) {
+        const user = await db.getUserById(session.userId);
+        if (user) return user;
+      }
     }
-
-    const session = activeSessions.get(token);
-    if (Date.now() > session.expiresAt) {
-      activeSessions.delete(token);
-      return sendJson(res, 401, { success: false, message: 'Session expired' });
+    const emailParam = queryParams.email || req.headers['x-user-email'];
+    if (emailParam && typeof emailParam === 'string' && emailParam.trim()) {
+      const user = await db.getUserByEmail(emailParam.trim());
+      if (user) return user;
     }
+    return null;
+  }
 
-    const users = getUsers();
-    const user = users.find(u => u.id === session.userId);
+  // 3. GET /api/auth/me (Current session)
+  if (pathname === '/api/auth/me' && req.method === 'GET') {
+    const user = await getAuthenticatedUser(req, query);
     if (!user) {
-      return sendJson(res, 404, { success: false, message: 'User not found' });
+      return sendJson(res, 401, { success: false, message: 'Unauthorized session' });
     }
 
     const effectiveGoal = user.goal || (user.nutritionTargets ? user.nutritionTargets.goal : 'maintain') || 'maintain';
@@ -542,112 +578,80 @@ const server = http.createServer(async (req, res) => {
   // 3b. POST or PUT /api/auth/profile/update (Update user's personal data & recalculate targets)
   if ((pathname === '/api/auth/profile/update' || pathname === '/api/auth/profile') && (req.method === 'POST' || req.method === 'PUT')) {
     try {
-      const authHeader = req.headers['authorization'] || '';
-      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
       const body = await parseJsonBody(req);
       const { name, age, weight, height, gymFrequency, goal, email } = body;
 
-      const users = getUsers();
-      let user = null;
-
-      if (token && activeSessions.has(token)) {
-        const session = activeSessions.get(token);
-        if (Date.now() <= session.expiresAt) {
-          user = users.find(u => u.id === session.userId);
-        }
-      }
-
-      if (!user && email && typeof email === 'string') {
-        const normalizedEmail = email.trim().toLowerCase();
-        user = users.find(u => u.email && u.email.toLowerCase() === normalizedEmail);
-      }
-
+      const user = await getAuthenticatedUser(req, { email });
       if (!user) {
         return sendJson(res, 401, { success: false, message: 'Authentication required to update profile' });
       }
 
       // Validate and update fields
-      if (name !== undefined) {
-        if (typeof name !== 'string' || !name.trim()) {
-          return sendJson(res, 400, { success: false, message: 'Full name cannot be blank' });
-        }
-        user.name = name.trim();
-      }
+      let newName = user.name;
+      let newAge = user.age;
+      let newWeight = user.weight;
+      let newHeight = user.height;
+      let newFrequency = user.gymFrequency;
+      let newGoal = user.goal;
 
+      if (name !== undefined && typeof name === 'string' && name.trim()) {
+        newName = name.trim();
+      }
       if (age !== undefined) {
         const parsedAge = parseInt(age, 10);
-        if (isNaN(parsedAge) || parsedAge < 12 || parsedAge > 100) {
-          return sendJson(res, 400, { success: false, message: 'Age must be a valid number between 12 and 100' });
-        }
-        user.age = parsedAge;
+        if (!isNaN(parsedAge) && parsedAge >= 12 && parsedAge <= 100) newAge = parsedAge;
       }
-
       if (weight !== undefined) {
         const parsedWeight = parseFloat(weight);
-        if (isNaN(parsedWeight) || parsedWeight < 30 || parsedWeight > 300) {
-          return sendJson(res, 400, { success: false, message: 'Weight must be a valid number between 30 and 300 kg' });
-        }
-        user.weight = Math.round(parsedWeight * 10) / 10;
+        if (!isNaN(parsedWeight) && parsedWeight >= 30 && parsedWeight <= 300) newWeight = Math.round(parsedWeight * 10) / 10;
       }
-
       if (height !== undefined) {
         const parsedHeight = parseFloat(height);
-        if (isNaN(parsedHeight) || parsedHeight < 100 || parsedHeight > 250) {
-          return sendJson(res, 400, { success: false, message: 'Height must be a valid number between 100 and 250 cm' });
-        }
-        user.height = Math.round(parsedHeight * 10) / 10;
+        if (!isNaN(parsedHeight) && parsedHeight >= 100 && parsedHeight <= 250) newHeight = Math.round(parsedHeight * 10) / 10;
+      }
+      if (gymFrequency !== undefined && typeof gymFrequency === 'string' && gymFrequency.trim()) {
+        let freq = gymFrequency.trim();
+        if (!freq.includes('days')) freq += ' days/wk';
+        newFrequency = freq;
+      }
+      if (goal !== undefined && typeof goal === 'string' && goal.trim()) {
+        const g = goal.trim().toLowerCase();
+        if (g.includes('loss') || g === 'weight_loss' || g === 'cut') newGoal = 'weight_loss';
+        else if (g.includes('gain') || g === 'weight_gain' || g === 'bulk') newGoal = 'weight_gain';
+        else newGoal = 'maintain';
       }
 
-      if (gymFrequency !== undefined) {
-        if (typeof gymFrequency === 'string' && gymFrequency.trim()) {
-          let freq = gymFrequency.trim();
-          if (!freq.includes('days')) freq += ' days/wk';
-          user.gymFrequency = freq;
-        }
-      }
+      const targets = calculateNutritionTargets(newWeight, newHeight, newAge, newFrequency, newGoal);
+      await db.updateUserProfile(user.id, {
+        weight: newWeight,
+        height: newHeight,
+        age: newAge,
+        gymFrequency: newFrequency,
+        goal: targets.goal,
+        nutritionTargets: targets
+      });
 
-      if (goal !== undefined) {
-        if (typeof goal === 'string' && goal.trim()) {
-          const g = goal.trim().toLowerCase();
-          if (g.includes('loss') || g === 'weight_loss' || g === 'cut') {
-            user.goal = 'weight_loss';
-          } else if (g.includes('gain') || g === 'weight_gain' || g === 'bulk') {
-            user.goal = 'weight_gain';
-          } else {
-            user.goal = 'maintain';
-          }
-        }
-      }
-
-      // Recalculate Mifflin-St Jeor nutrition targets based on physical parameters and goal
-      const targets = calculateNutritionTargets(user.weight, user.height, user.age, user.gymFrequency, user.goal);
-      user.nutritionTargets = targets;
-      user.goal = targets.goal;
-      user.updatedAt = Date.now();
-
-      saveUsers(users);
-      console.log(`[API] Profile updated for user ${user.name} (${user.email}): Age=${user.age}, Weight=${user.weight}kg, Height=${user.height}cm, Gym=${user.gymFrequency}, Goal=${targets.goalLabel} -> Target: ${targets.targetCalories} kcal`);
+      console.log(`[API] Profile updated in DB for user ${user.name} (${user.email}): Age=${newAge}, Weight=${newWeight}kg, Target=${targets.targetCalories} kcal`);
 
       return sendJson(res, 200, {
         success: true,
         message: 'Personal data updated successfully',
         user: {
           id: user.id,
-          name: user.name,
+          name: newName,
           email: user.email,
           picture: user.picture || '',
-          age: user.age,
-          weight: user.weight,
-          height: user.height,
-          gymFrequency: user.gymFrequency,
-          goal: user.goal || targets.goal,
-          nutritionTargets: user.nutritionTargets,
-          authProvider: user.authProvider || 'local'
+          age: newAge,
+          weight: newWeight,
+          height: newHeight,
+          gymFrequency: newFrequency,
+          goal: targets.goal,
+          nutritionTargets: targets
         }
       });
     } catch (err) {
-      console.error('[API] Profile update error:', err);
-      return sendJson(res, 500, { success: false, message: 'Server error updating profile' });
+      console.error('[API] Error updating profile:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to update personal data' });
     }
   }
 
@@ -816,8 +820,10 @@ const server = http.createServer(async (req, res) => {
       }
 
       const normalizedEmail = email.trim().toLowerCase();
-      const users = getUsers();
-      let user = users.find(u => u.email.toLowerCase() === normalizedEmail);
+      let user = await db.getUserByEmail(normalizedEmail);
+      if (!user && googleId) {
+        user = await db.getUserByGoogleId(googleId);
+      }
       let isNewUser = false;
 
       // Parse & validate physical metrics and goal
@@ -832,8 +838,8 @@ const server = http.createServer(async (req, res) => {
         parsedAge = Math.min(Math.max(parseInt(age, 10) || 25, 12), 100);
         parsedWeight = Math.min(Math.max(parseFloat(weight) || 68.5, 30.0), 300.0);
         parsedHeight = Math.min(Math.max(parseFloat(height) || 175.0, 100.0), 250.0);
-        selectedFrequency = gymFrequency || (user ? user.gymFrequency : '4-5 days/wk') || '4-5 days/wk';
-        selectedGoal = goal || (user ? user.goal : 'maintain') || 'maintain';
+        selectedFrequency = String(gymFrequency || (user ? user.gymFrequency : '4-5 days/wk') || '4-5 days/wk');
+        selectedGoal = String(goal || (user ? user.goal : 'maintain') || 'maintain');
         targets = calculateNutritionTargets(parsedWeight, parsedHeight, parsedAge, selectedFrequency, selectedGoal);
       } else if (!user) {
         // Brand new user must have physical metrics provided
@@ -851,49 +857,38 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (!user) {
-        // Register brand new user provisioned via Google
+        // Register brand new user provisioned via Google in DB
         isNewUser = true;
         const displayName = (name && typeof name === 'string' && name.trim()) ? name.trim() : normalizedEmail.split('@')[0];
 
-        user = {
+        user = await db.createUser({
           id: 'usr_g_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
           googleId: googleId || ('g_' + crypto.randomBytes(8).toString('hex')),
           name: displayName,
           email: normalizedEmail,
-          authProvider: 'google',
-          emailVerified: true,
           picture: picture || '',
           age: parsedAge,
           weight: parsedWeight,
           height: parsedHeight,
           gymFrequency: selectedFrequency,
           goal: targets.goal,
-          nutritionTargets: targets,
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        };
-
-        users.push(user);
-        saveUsers(users);
-        console.log(`[API] Registered new Google user: ${user.name} (${user.email}) | Goal: ${targets.goalLabel} | Target: ${targets.targetCalories} kcal`);
+          nutritionTargets: targets
+        });
+        console.log(`[API] Registered new Google user in DB: ${user.name} (${user.email}) | Goal: ${targets.goalLabel} | Target: ${targets.targetCalories} kcal`);
       } else {
-        // Update profile and metrics for existing user
-        if (age !== undefined) user.age = parsedAge;
-        if (weight !== undefined) user.weight = parsedWeight;
-        if (height !== undefined) user.height = parsedHeight;
-        if (gymFrequency) user.gymFrequency = selectedFrequency;
-        if (goal) user.goal = targets.goal;
-        if (name && typeof name === 'string' && name.trim()) user.name = name.trim();
-        if (picture) user.picture = picture;
-        if (googleId) user.googleId = googleId;
-        user.authProvider = user.authProvider || 'google';
-        user.emailVerified = true;
-        user.nutritionTargets = targets;
-        user.goal = targets.goal;
-        user.updatedAt = Date.now();
-
-        saveUsers(users);
-        console.log(`[API] User authenticated via Google: ${user.name} (${user.email}) | Goal: ${targets.goalLabel} | Target: ${targets.targetCalories} kcal`);
+        // Update profile and metrics for existing user in DB
+        if (googleId && !user.googleId) {
+          await db.linkGoogleAccount(user.id, googleId);
+        }
+        user = await db.updateUserProfile(user.id, {
+          weight: parsedWeight || user.weight,
+          height: parsedHeight || user.height,
+          age: parsedAge || user.age,
+          gymFrequency: selectedFrequency,
+          goal: targets.goal,
+          nutritionTargets: targets
+        }) || user;
+        console.log(`[API] User authenticated via Google in DB: ${user.name} (${user.email}) | Goal: ${targets.goalLabel} | Target: ${targets.targetCalories} kcal`);
       }
 
       // Generate Session Token
@@ -976,32 +971,12 @@ const server = http.createServer(async (req, res) => {
   const isFavoritesRoute = pathname === '/api/favorites' || pathname === '/api/favourites';
   const isFavoritesIdRoute = pathname.startsWith('/api/favorites/') || pathname.startsWith('/api/favourites/');
 
-  function getAuthenticatedEmail(req, queryParams = {}) {
-    const authHeader = req.headers['authorization'] || '';
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (token && activeSessions.has(token)) {
-      const session = activeSessions.get(token);
-      if (Date.now() <= session.expiresAt) {
-        const users = getUsers();
-        const user = users.find(u => u.id === session.userId);
-        if (user && user.email) return user.email.toLowerCase().trim();
-      }
-    }
-    if (queryParams.email && typeof queryParams.email === 'string') {
-      return queryParams.email.toLowerCase().trim();
-    }
-    const headerEmail = req.headers['x-user-email'];
-    if (headerEmail && typeof headerEmail === 'string' && headerEmail.trim()) {
-      return headerEmail.toLowerCase().trim();
-    }
-    return 'default';
-  }
-
   // 10a. GET /api/favorites (Fetch all favourites for user)
   if (isFavoritesRoute && req.method === 'GET') {
     try {
-      const userKey = getAuthenticatedEmail(req, query);
-      const favorites = getUserFavorites(userKey);
+      const user = await getAuthenticatedUser(req, query);
+      const userKey = user ? user.id : (query.email ? query.email.toLowerCase().trim() : 'default');
+      const favorites = await db.getFavorites(userKey);
       return sendJson(res, 200, {
         success: true,
         user: userKey,
@@ -1018,42 +993,32 @@ const server = http.createServer(async (req, res) => {
   if (isFavoritesRoute && req.method === 'POST') {
     try {
       const body = await parseJsonBody(req);
-      const { name, calories, protein, carbs, fats, fiber, portion, email } = body;
+      const { name, calories, protein, carbs, fats, portion, mealType, email } = body;
 
       if (!name || typeof name !== 'string' || !name.trim()) {
         return sendJson(res, 400, { success: false, message: 'Food item name is required' });
       }
 
-      const userKey = email ? email.toLowerCase().trim() : getAuthenticatedEmail(req, query);
-      const map = getFavoritesMap();
-      if (!map[userKey]) {
-        map[userKey] = (map['default'] || []).map(f => ({
-          ...f,
-          id: 'fav_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)
-        }));
-      }
+      const user = await getAuthenticatedUser(req, { email });
+      const userKey = user ? user.id : (email ? email.toLowerCase().trim() : 'default');
 
-      const newFavorite = {
-        id: 'fav_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      const newFavorite = await db.addFavorite(userKey, {
         name: name.trim(),
         portion: (portion || '1 serving').trim(),
         calories: Math.max(parseInt(calories, 10) || 0, 0),
         protein: Math.max(parseFloat(protein) || 0, 0),
         carbs: Math.max(parseFloat(carbs) || 0, 0),
-        fats: Math.max(parseFloat(fats) || 0, 0),
-        fiber: Math.max(parseFloat(fiber) || 0, 0),
-        createdAt: Date.now()
-      };
+        fat: Math.max(parseFloat(fats) || 0, 0),
+        mealType: mealType || 'snack'
+      });
 
-      map[userKey].unshift(newFavorite);
-      saveFavoritesMap(map);
-
-      console.log(`[API] Added favourite "${newFavorite.name}" (${newFavorite.calories} kcal) for user ${userKey}`);
+      console.log(`[API] Added favourite in DB: "${newFavorite.name}" (${newFavorite.calories} kcal) for user ${userKey}`);
+      const updatedList = await db.getFavorites(userKey);
       return sendJson(res, 201, {
         success: true,
         message: `"${newFavorite.name}" added to favourites`,
         favorite: newFavorite,
-        favorites: map[userKey]
+        favorites: updatedList
       });
     } catch (err) {
       console.error('Error in POST /api/favorites:', err);
@@ -1085,19 +1050,18 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { success: false, message: 'Favourite ID is required' });
       }
 
-      const userKey = emailParam ? emailParam.toLowerCase().trim() : getAuthenticatedEmail(req, query);
-      const map = getFavoritesMap();
-      if (map[userKey]) {
-        map[userKey] = map[userKey].filter(f => f.id !== favId);
-        saveFavoritesMap(map);
-      }
+      const user = await getAuthenticatedUser(req, { email: emailParam });
+      const userKey = user ? user.id : (emailParam ? emailParam.toLowerCase().trim() : 'default');
 
-      console.log(`[API] Removed favourite ${favId} for user ${userKey}`);
+      await db.deleteFavorite(userKey, favId);
+      console.log(`[API] Removed favourite ${favId} in DB for user ${userKey}`);
+      const updatedList = await db.getFavorites(userKey);
+
       return sendJson(res, 200, {
         success: true,
         message: 'Favourite removed',
         id: favId,
-        favorites: map[userKey] || []
+        favorites: updatedList
       });
     } catch (err) {
       console.error('Error deleting favourite:', err);
@@ -1105,12 +1069,74 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // ==================== 11. DAILY LOGS & CLOUD SYNC API ====================
+  // 11a. GET /api/logs/daily (Fetch meals, hydration, burned calories, workout sets for date)
+  if (pathname === '/api/logs/daily' && req.method === 'GET') {
+    try {
+      const user = await getAuthenticatedUser(req, query);
+      if (!user) {
+        return sendJson(res, 401, { success: false, message: 'Authentication required' });
+      }
+      const dateStr = query.date || new Date().toISOString().slice(0, 10);
+      const log = await db.getDailyLog(user.id, dateStr);
+      return sendJson(res, 200, { success: true, date: dateStr, log: log || null });
+    } catch (err) {
+      console.error('[API] Error fetching daily log:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to fetch daily log' });
+    }
+  }
+
+  // 11b. POST /api/logs/daily (Upsert meals, hydration, burned calories, workout sets for date)
+  if (pathname === '/api/logs/daily' && req.method === 'POST') {
+    try {
+      const user = await getAuthenticatedUser(req, query);
+      if (!user) {
+        return sendJson(res, 401, { success: false, message: 'Authentication required' });
+      }
+      const body = await parseJsonBody(req);
+      const dateStr = body.date || query.date || new Date().toISOString().slice(0, 10);
+      const savedLog = await db.upsertDailyLog(user.id, dateStr, body);
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Daily tracking synced to database',
+        log: savedLog
+      });
+    } catch (err) {
+      console.error('[API] Error syncing daily log:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to sync daily tracking' });
+    }
+  }
+
+  // 11c. GET /api/logs/history (Weekly or date-range history)
+  if (pathname === '/api/logs/history' && req.method === 'GET') {
+    try {
+      const user = await getAuthenticatedUser(req, query);
+      if (!user) {
+        return sendJson(res, 401, { success: false, message: 'Authentication required' });
+      }
+      const { start, end } = query;
+      const history = await db.getWeeklyHistory(user.id, start || '2000-01-01', end || '2099-12-31');
+      return sendJson(res, 200, { success: true, history: history || [] });
+    } catch (err) {
+      console.error('[API] Error fetching history:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to fetch history' });
+    }
+  }
+
   // ==================== STATIC ASSETS ====================
   return serveStaticFile(req, res);
 });
 
-server.listen(PORT, () => {
-  console.log(`[FitTrack Server] Running at http://localhost:${PORT}`);
-  console.log(`[FitTrack Server] Serving static preview from ${PREVIEW_DIR}`);
-  console.log(`[FitTrack Server] Auth API available at /api/auth/*`);
-});
+(async () => {
+  try {
+    await db.init();
+    server.listen(PORT, () => {
+      console.log(`[FitTrack Server] Running at http://localhost:${PORT}`);
+      console.log(`[FitTrack Server] Serving static preview from ${PREVIEW_DIR}`);
+      console.log(`[FitTrack Server] Database Engine: ${db.isPostgres() ? 'Cloud PostgreSQL' : 'Local Persistent Storage'}`);
+      console.log(`[FitTrack Server] Auth, Favourites & Cloud Sync APIs active`);
+    });
+  } catch (err) {
+    console.error('[FitTrack Server] Fatal startup error:', err);
+  }
+})();

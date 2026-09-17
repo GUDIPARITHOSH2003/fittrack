@@ -185,7 +185,7 @@
       }
     },
     "createdAt": 1788959602229,
-    "updatedAt": 1789625399892,
+    "updatedAt": 1789636766554,
     "goal": "weight_gain"
   },
   {
@@ -210,5 +210,151 @@
     },
     "createdAt": 1788960560406,
     "updatedAt": 1788960560406
+  },
+  {
+    "id": "usr_1789637887655_xjxdui",
+    "name": "Backend Test User",
+    "email": "test_audit_1789637887632@wellness.io",
+    "passwordHash": "ec2737545598e4aff36cde681c663d5f2179324d175dfef9e1bd421b19411c8f",
+    "salt": "13a935e829dc92d43476831010e36f50",
+    "age": 26,
+    "weight": 75,
+    "height": 178,
+    "gymFrequency": 4,
+    "goal": "weight_gain",
+    "nutritionTargets": {
+      "bmr": 1738,
+      "maintenanceCalories": 2694,
+      "targetCalories": 3194,
+      "calorieAdjustment": 500,
+      "goal": "weight_gain",
+      "goalLabel": "Weight Gain",
+      "targetProtein": 200,
+      "targetCarbs": 439,
+      "targetFats": 71,
+      "targetWater": 2650,
+      "mealBreakdown": {
+        "breakfast": 894,
+        "lunch": 1118,
+        "dinner": 862,
+        "snack": 320
+      }
+    },
+    "createdAt": 1789637887655
+  },
+  {
+    "id": "usr_1789637899527_1fsp5z",
+    "name": "Audit User",
+    "email": "audit_login_1789637899506@wellness.io",
+    "passwordHash": "87f786eeea17f60e09ef63a8a2f422a3172aebe09527ee6908fa299b58086ebb",
+    "salt": "d83768217fca22945126df2094661064",
+    "age": 25,
+    "weight": 68.5,
+    "height": 175,
+    "gymFrequency": "4-5 days/wk",
+    "goal": "maintain",
+    "nutritionTargets": {
+      "bmr": 1659,
+      "maintenanceCalories": 2571,
+      "targetCalories": 2571,
+      "calorieAdjustment": 0,
+      "goal": "maintain",
+      "goalLabel": "Maintain Weight",
+      "targetProtein": 193,
+      "targetCarbs": 289,
+      "targetFats": 71,
+      "targetWater": 2400,
+      "mealBreakdown": {
+        "breakfast": 720,
+        "lunch": 900,
+        "dinner": 694,
+        "snack": 257
+      }
+    },
+    "createdAt": 1789637899527
+  },
+  {
+    "id": "usr_1789638113962_8e8euo",
+    "email": "db_test_1789638113962@wellness.io",
+    "passwordHash": "testhash",
+    "salt": "testsalt",
+    "googleId": null,
+    "name": "Database Tester",
+    "age": 28,
+    "weight": 80,
+    "height": 180,
+    "gymFrequency": "4-5 days/wk",
+    "goal": "weight_loss",
+    "nutritionTargets": {
+      "targetCalories": 2100
+    },
+    "createdAt": 1789638113962,
+    "updatedAt": 1789638113962
+  },
+  {
+    "id": "usr_1789638394905_sbhde7",
+    "email": "db_sync_test_1789638394880@wellness.io",
+    "passwordHash": "57d5d70f2f7706acc5ae59588577424c9cf7bcf3aa996d0e2a2dbb7983d9d3a0",
+    "salt": "bb343baaeb26a681bd4a2cc9cf9e93b0",
+    "googleId": null,
+    "name": "DB Sync User",
+    "age": 26,
+    "weight": 75,
+    "height": 180,
+    "gymFrequency": "4-5 days/wk",
+    "goal": "weight_gain",
+    "nutritionTargets": {
+      "bmr": 1750,
+      "maintenanceCalories": 2713,
+      "targetCalories": 3213,
+      "calorieAdjustment": 500,
+      "goal": "weight_gain",
+      "goalLabel": "Weight Gain",
+      "targetProtein": 201,
+      "targetCarbs": 442,
+      "targetFats": 71,
+      "targetWater": 2650,
+      "mealBreakdown": {
+        "breakfast": 900,
+        "lunch": 1125,
+        "dinner": 868,
+        "snack": 320
+      }
+    },
+    "createdAt": 1789638394905,
+    "updatedAt": 1789638394905
+  },
+  {
+    "id": "usr_1789638714956_mcv9hi",
+    "email": "cloud_user_1789638714937@wellness.io",
+    "passwordHash": "ed7746bea67e9a78b397b90cf9530ec609ed7934ee08382f663c26d57ec7f121",
+    "salt": "82a818130e57939a559f6c27ac19e64d",
+    "googleId": null,
+    "name": "Cloud Athlete",
+    "age": 26,
+    "weight": 78,
+    "height": 182,
+    "gymFrequency": "4-5 days/wk",
+    "goal": "weight_gain",
+    "nutritionTargets": {
+      "bmr": 1793,
+      "maintenanceCalories": 2779,
+      "targetCalories": 3279,
+      "calorieAdjustment": 500,
+      "goal": "weight_gain",
+      "goalLabel": "Weight Gain",
+      "targetProtein": 205,
+      "targetCarbs": 451,
+      "targetFats": 73,
+      "targetWater": 2750,
+      "mealBreakdown": {
+        "breakfast": 918,
+        "lunch": 1148,
+        "dinner": 885,
+        "snack": 328
+      }
+    },
+    "createdAt": 1789638714956,
+    "updatedAt": 1789638714956
   }
 ]

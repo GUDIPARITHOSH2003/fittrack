@@ -1,0 +1,22 @@
+{
+  "name": "fittrack",
+  "version": "1.0.0",
+  "description": "FitTrack - Calorie, Macro & Fitness Workout Tracker",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node scratch/test_db_integration.js"
+  },
+  "keywords": [
+    "fitness",
+    "calorie-tracker",
+    "macro-counter",
+    "workout",
+    "health"
+  ],
+  "author": "FitTrack Team",
+  "license": "MIT",
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

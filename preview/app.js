@@ -2089,6 +2089,11 @@ document.addEventListener('DOMContentLoaded', () => {
       lunchItemList.innerHTML = '<li class="meal-empty-note">No lunch logged yet today. Tap + to add food.</li>';
     }
 
+    const dinnerItemList = document.getElementById('dinnerItemList');
+    if (dinnerItemList) {
+      dinnerItemList.innerHTML = '<li class="meal-empty-note">No dinner logged yet today. Tap + to add food.</li>';
+    }
+
     if (snackItemList) {
       snackItemList.innerHTML = '<li class="meal-empty-note">No snacks logged yet today. Tap + to add food.</li>';
     }
@@ -2205,11 +2210,200 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Save current user state to localStorage
+  let syncDebounceTimer = null;
+
+  // Cloud Database Sync: Push tracking data to /api/logs/daily
+  async function syncDailyLogToDatabase() {
+    const token = localStorage.getItem('fittrack_token');
+    if (!token) return;
+
+    let curUser = null;
+    try {
+      curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+    } catch (e) {}
+    if (!curUser || !curUser.email) return;
+
+    const breakfastItemList = document.getElementById('breakfastItemList');
+    const lunchItemList = document.getElementById('lunchItemList');
+    const dinnerItemList = document.getElementById('dinnerItemList');
+    const todayStr = getTodayDateString();
+
+    const payload = {
+      date: todayStr,
+      waterIntake: state.waterIntake || 0,
+      waterTarget: state.waterTarget || 2500,
+      consumedCalories: state.consumedCalories || 0,
+      carbs: state.carbs || 0,
+      protein: state.protein || 0,
+      fats: state.fats || 0,
+      fiber: state.fiber || 0,
+      activeBurned: state.activeBurned || 0,
+      completedExercises: completedSetMap || {},
+      meals: {
+        snackCalories: state.snackCalories || 0,
+        breakfastCalories: state.breakfastCalories || 0,
+        lunchCalories: state.lunchCalories || 0,
+        dinnerCalories: state.dinnerCalories || 0,
+        snackHtml: snackItemList ? snackItemList.innerHTML : '',
+        breakfastHtml: breakfastItemList ? breakfastItemList.innerHTML : '',
+        lunchHtml: lunchItemList ? lunchItemList.innerHTML : '',
+        dinnerHtml: dinnerItemList ? dinnerItemList.innerHTML : ''
+      }
+    };
+
+    try {
+      const res = await fetch('/api/logs/daily', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        console.log('[FitTrack DB] Synced daily log to database for date:', todayStr);
+      }
+    } catch (err) {
+      console.warn('[FitTrack DB] Background sync error:', err);
+    }
+  }
+
+  function queueSyncToDatabase() {
+    if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+    syncDebounceTimer = setTimeout(() => {
+      syncDailyLogToDatabase();
+    }, 600);
+  }
+
+  // Cloud Database Sync: Pull today's log from /api/logs/daily
+  async function fetchDailyLogFromDatabase(email) {
+    const token = localStorage.getItem('fittrack_token');
+    if (!token || !email) return;
+
+    const todayStr = getTodayDateString();
+    try {
+      const res = await fetch(`/api/logs/daily?date=${todayStr}`, {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.success || !data.log) return;
+
+      const log = data.log;
+      console.log('[FitTrack DB] Loaded daily log from database:', log);
+
+      state.waterIntake = log.waterIntake || 0;
+      state.waterDate = log.date || todayStr;
+      state.consumedCalories = log.consumedCalories || 0;
+      state.carbs = log.carbs || 0;
+      state.protein = log.protein || 0;
+      state.fats = log.fats || 0;
+      state.fiber = log.fiber || 0;
+      if (log.waterTarget) state.waterTarget = log.waterTarget;
+      state.activeBurned = log.activeBurned || 0;
+      completedSetMap = log.completedExercises || {};
+
+      const meals = log.meals || {};
+      state.snackCalories = meals.snackCalories || 0;
+      state.breakfastCalories = meals.breakfastCalories || 0;
+      state.lunchCalories = meals.lunchCalories || 0;
+      state.dinnerCalories = meals.dinnerCalories || 0;
+
+      const breakfastItemList = document.getElementById('breakfastItemList');
+      const lunchItemList = document.getElementById('lunchItemList');
+      const dinnerItemList = document.getElementById('dinnerItemList');
+
+      if (breakfastItemList && meals.breakfastHtml) {
+        breakfastItemList.innerHTML = meals.breakfastHtml;
+      }
+      if (lunchItemList && meals.lunchHtml) {
+        lunchItemList.innerHTML = meals.lunchHtml;
+      }
+      if (dinnerItemList && meals.dinnerHtml) {
+        dinnerItemList.innerHTML = meals.dinnerHtml;
+      }
+      if (snackItemList && meals.snackHtml) {
+        snackItemList.innerHTML = meals.snackHtml;
+      }
+
+      renderExerciseChecklist();
+      updateWorkoutHeroUI();
+      ensureDeleteButtonsInMealLists();
+      updateMacroRings();
+      updateWater();
+      updateMealSummaries();
+      updateOverviewMetrics();
+      updateDateDisplay();
+
+      // Mirror to local cache for instant offline responsiveness
+      const userData = {
+        date: todayStr,
+        waterDate: state.waterDate || todayStr,
+        waterIntake: state.waterIntake,
+        waterTarget: state.waterTarget,
+        consumedCalories: state.consumedCalories,
+        targetCalories: state.targetCalories,
+        carbs: state.carbs,
+        protein: state.protein,
+        fats: state.fats,
+        fiber: state.fiber,
+        activeBurned: state.activeBurned,
+        completedSetMap: completedSetMap || {},
+        snackCalories: state.snackCalories || 0,
+        breakfastCalories: state.breakfastCalories || 0,
+        lunchCalories: state.lunchCalories || 0,
+        dinnerCalories: state.dinnerCalories || 0,
+        snackHtml: snackItemList ? snackItemList.innerHTML : '',
+        breakfastHtml: breakfastItemList ? breakfastItemList.innerHTML : '',
+        lunchHtml: lunchItemList ? lunchItemList.innerHTML : '',
+        dinnerHtml: dinnerItemList ? dinnerItemList.innerHTML : ''
+      };
+      localStorage.setItem('fittrack_data_' + email, JSON.stringify(userData));
+    } catch (err) {
+      console.warn('[FitTrack DB] Could not fetch daily log from database:', err);
+    }
+  }
+
+  // Cloud Database Sync: Pull weekly/historical logs from /api/logs/history
+  async function fetchHistoryFromDatabase(email) {
+    const token = localStorage.getItem('fittrack_token');
+    if (!token || !email) return;
+
+    try {
+      const res = await fetch('/api/logs/history', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.success || !Array.isArray(data.history)) return;
+
+      const histKey = 'fittrack_history_' + email;
+      let historyMap = {};
+      try {
+        historyMap = JSON.parse(localStorage.getItem(histKey) || '{}');
+      } catch (e) {}
+
+      data.history.forEach(item => {
+        if (item.date) {
+          historyMap[item.date] = {
+            consumed: item.consumed || 0,
+            burned: item.burned || 0
+          };
+        }
+      });
+      localStorage.setItem(histKey, JSON.stringify(historyMap));
+      updateOverviewMetrics();
+    } catch (err) {
+      console.warn('[FitTrack DB] Could not fetch history from database:', err);
+    }
+  }
+
+  // Save current user state to localStorage and trigger database sync
   function saveUserData(email) {
     if (!email) return;
     const breakfastItemList = document.getElementById('breakfastItemList');
     const lunchItemList = document.getElementById('lunchItemList');
+    const dinnerItemList = document.getElementById('dinnerItemList');
     const todayStr = getTodayDateString();
 
     const userData = {
@@ -2231,7 +2425,8 @@ document.addEventListener('DOMContentLoaded', () => {
       dinnerCalories: state.dinnerCalories || 0,
       snackHtml: snackItemList ? snackItemList.innerHTML : '',
       breakfastHtml: breakfastItemList ? breakfastItemList.innerHTML : '',
-      lunchHtml: lunchItemList ? lunchItemList.innerHTML : ''
+      lunchHtml: lunchItemList ? lunchItemList.innerHTML : '',
+      dinnerHtml: dinnerItemList ? dinnerItemList.innerHTML : ''
     };
     localStorage.setItem('fittrack_data_' + email, JSON.stringify(userData));
 
@@ -2244,6 +2439,9 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       localStorage.setItem(histKey, JSON.stringify(history));
     } catch (e) {}
+
+    // Synchronize seamlessly to backend database
+    queueSyncToDatabase();
   }
 
   // Load user-specific tracking state
@@ -2319,12 +2517,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const breakfastItemList = document.getElementById('breakfastItemList');
           const lunchItemList = document.getElementById('lunchItemList');
+          const dinnerItemList = document.getElementById('dinnerItemList');
 
           if (breakfastItemList) {
             breakfastItemList.innerHTML = '<li class="meal-empty-note">No breakfast logged yet today. Tap + to add food.</li>';
           }
           if (lunchItemList) {
             lunchItemList.innerHTML = '<li class="meal-empty-note">No lunch logged yet today. Tap + to add food.</li>';
+          }
+          if (dinnerItemList) {
+            dinnerItemList.innerHTML = '<li class="meal-empty-note">No dinner logged yet today. Tap + to add food.</li>';
           }
           if (snackItemList) {
             snackItemList.innerHTML = '<li class="meal-empty-note">No snacks logged yet today. Tap + to add food.</li>';
@@ -2379,6 +2581,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const breakfastItemList = document.getElementById('breakfastItemList');
         const lunchItemList = document.getElementById('lunchItemList');
+        const dinnerItemList = document.getElementById('dinnerItemList');
 
         if (breakfastItemList && parsed.breakfastHtml) {
           breakfastItemList.innerHTML = parsed.breakfastHtml;
@@ -2392,6 +2595,12 @@ document.addEventListener('DOMContentLoaded', () => {
           lunchItemList.innerHTML = '<li class="meal-empty-note">No lunch logged yet today. Tap + to add food.</li>';
         }
 
+        if (dinnerItemList && parsed.dinnerHtml) {
+          dinnerItemList.innerHTML = parsed.dinnerHtml;
+        } else if (dinnerItemList) {
+          dinnerItemList.innerHTML = '<li class="meal-empty-note">No dinner logged yet today. Tap + to add food.</li>';
+        }
+
         if (snackItemList && parsed.snackHtml) {
           snackItemList.innerHTML = parsed.snackHtml;
         } else if (snackItemList) {
@@ -2401,6 +2610,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ensureDeleteButtonsInMealLists();
         updateOverviewMetrics();
         updateDateDisplay();
+
+        // Check backend database for newer synced data or updates from another device
+        fetchDailyLogFromDatabase(email);
+        fetchHistoryFromDatabase(email);
         return;
       } catch (e) {
         console.warn('Failed parsing saved user data', e);
@@ -2411,6 +2624,10 @@ document.addEventListener('DOMContentLoaded', () => {
     resetUserDataToZero();
     state.waterDate = todayStr;
     updateDateDisplay();
+
+    // Check backend database if data exists for this account
+    fetchDailyLogFromDatabase(email);
+    fetchHistoryFromDatabase(email);
   }
 
   // Check stored active session on startup
@@ -3761,6 +3978,78 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   if (resetSimulatedDayBtn) {
     resetSimulatedDayBtn.addEventListener('click', resetSimulatedDate);
+  }
+
+  // ==================== PWA / MOBILE INSTALL LOGIC ====================
+  let deferredInstallPrompt = null;
+  const installAppBtn = document.getElementById('installAppBtn');
+  const installModalBackdrop = document.getElementById('installModalBackdrop');
+  const closeInstallModal = document.getElementById('closeInstallModal');
+  const triggerNativeInstallBtn = document.getElementById('triggerNativeInstallBtn');
+
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        console.log('[FitTrack PWA] Service worker registered:', reg.scope);
+      }).catch((err) => {
+        console.warn('[FitTrack PWA] SW registration failed:', err);
+      });
+    });
+  }
+
+  // Listen for beforeinstallprompt (Android / Chrome)
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    console.log('[FitTrack PWA] Captured beforeinstallprompt!');
+    if (installAppBtn) {
+      installAppBtn.style.animation = 'pulse 2s infinite';
+    }
+  });
+
+  window.addEventListener('appinstalled', () => {
+    console.log('[FitTrack PWA] FitTrack was successfully installed!');
+    deferredInstallPrompt = null;
+    if (installModalBackdrop) installModalBackdrop.style.display = 'none';
+    showToast('🎉 FitTrack installed to your Home Screen!');
+  });
+
+  function openInstallModal() {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.then((choiceResult) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('[FitTrack PWA] User accepted installation prompt');
+        } else {
+          console.log('[FitTrack PWA] User dismissed installation prompt');
+        }
+        deferredInstallPrompt = null;
+      });
+    } else {
+      if (installModalBackdrop) installModalBackdrop.style.display = 'flex';
+    }
+  }
+
+  if (installAppBtn) {
+    installAppBtn.addEventListener('click', openInstallModal);
+  }
+  if (closeInstallModal && installModalBackdrop) {
+    closeInstallModal.addEventListener('click', () => {
+      installModalBackdrop.style.display = 'none';
+    });
+    installModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === installModalBackdrop) installModalBackdrop.style.display = 'none';
+    });
+  }
+  if (triggerNativeInstallBtn) {
+    triggerNativeInstallBtn.addEventListener('click', () => {
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+      } else {
+        showToast('💡 Follow the steps above in Chrome or Safari to add to your Home Screen!');
+      }
+    });
   }
 
   // Expose FitTrackApp API globally for testing and automation
