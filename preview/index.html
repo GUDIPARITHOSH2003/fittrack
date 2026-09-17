@@ -511,32 +511,38 @@
             <button class="period-tab" id="overviewPeriodWeek" data-period="week">This Week</button>
           </div>
 
-          <!-- Week Navigator Controls (Visible when "This Week" is selected) -->
-          <div class="week-navigator-bar" id="weekNavigatorBar" style="display: none; align-items: center; justify-content: space-between; margin-top: 10px; margin-bottom: 12px; background: rgba(29, 63, 55, 0.06); padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(29, 63, 55, 0.12);">
-            <button type="button" class="week-nav-btn" id="prevWeekBtn" style="background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; cursor: pointer; color: #1D3F37; font-weight: 600; padding: 4px 10px;">‹ Prev Week</button>
-            <span id="overviewWeekRangeText" style="font-size: 11px; font-weight: 700; color: #1D3F37; letter-spacing: 0.3px; text-transform: uppercase;">THIS WEEK (SEP 15 - SEP 21)</span>
-            <button type="button" class="week-nav-btn" id="nextWeekBtn" style="background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; cursor: pointer; color: #1D3F37; font-weight: 600; padding: 4px 10px;">Next Week ›</button>
-          </div>
-
           <!-- Energy Balance Comparison Card -->
           <div class="card energy-balance-card">
             <div class="card-header-row">
-              <span class="card-title">Daily Energy Balance</span>
-              <span class="status-pill" id="energyBalanceNet">+780 kcal Net</span>
+              <span class="card-title" id="energyBalanceTitle">Daily Energy Balance</span>
+              <span class="status-pill" id="energyBalanceNet">+0 kcal Net</span>
             </div>
             <div class="balance-stats-row">
               <div>
-                <span class="stat-lbl">Consumed</span>
-                <span class="stat-val text-carbs" id="overviewConsumed">1,320 kcal</span>
+                <span class="stat-lbl" id="overviewConsumedLbl">Consumed</span>
+                <span class="stat-val text-carbs" id="overviewConsumed">0 kcal</span>
               </div>
               <div class="align-right">
-                <span class="stat-lbl">Active Burned</span>
-                <span class="stat-val text-protein" id="overviewBurned">540 kcal</span>
+                <span class="stat-lbl" id="overviewBurnedLbl">Active Burned</span>
+                <span class="stat-val text-protein" id="overviewBurned">0 kcal</span>
               </div>
             </div>
+
+            <!-- Weekly Daily Averages Row (Dynamically displayed in This Week view) -->
+            <div class="balance-averages-row" id="weeklyAveragesRow" style="display: none; margin-top: 10px; margin-bottom: 12px; padding: 9px 12px; background: var(--surface-secondary); border-radius: 10px; justify-content: space-between; align-items: center;">
+              <div>
+                <span class="stat-lbl" style="font-size: 10.5px; font-weight: 600;">Avg Daily Consumed</span>
+                <span class="stat-val text-carbs" id="overviewAvgConsumed" style="font-size: 14px; font-weight: 800;">0 kcal/day</span>
+              </div>
+              <div class="align-right">
+                <span class="stat-lbl" style="font-size: 10.5px; font-weight: 600;">Avg Daily Burned</span>
+                <span class="stat-val text-protein" id="overviewAvgBurned" style="font-size: 14px; font-weight: 800;">0 kcal/day</span>
+              </div>
+            </div>
+
             <div class="ratio-progress-bar">
-              <div class="ratio-segment bg-carbs" id="balanceRatioConsumed" style="width: 71%;"></div>
-              <div class="ratio-segment bg-protein" id="balanceRatioBurned" style="width: 29%;"></div>
+              <div class="ratio-segment bg-carbs" id="balanceRatioConsumed" style="width: 50%;"></div>
+              <div class="ratio-segment bg-protein" id="balanceRatioBurned" style="width: 50%;"></div>
             </div>
           </div>
 
@@ -610,6 +616,22 @@
                 <div class="metric-name" id="metricSleepTitle">Sleep Duration</div>
                 <div class="metric-sub" id="metricSleepSub">No sleep recorded yet</div>
               </div>
+            </div>
+          </div>
+
+          <!-- Weekly Days Breakdown (Monday - Sunday: Consumed & Burned) -->
+          <div class="card weekly-breakdown-card" id="weeklyBreakdownCard" style="display: none; margin-top: 14px;">
+            <div class="card-header-row" style="margin-bottom: 12px;">
+              <div>
+                <span class="card-title" style="display: block; margin-bottom: 2px;">Weekly Daily Breakdown</span>
+                <span class="stat-lbl" style="font-size: 11px;">Calories Consumed & Active Burned</span>
+              </div>
+              <span class="tag-pill-lime" id="weeklyBreakdownBadge" style="font-size: 11px; font-weight: 700; padding: 3px 8px;">Mon - Sun</span>
+            </div>
+
+            <!-- List of all 7 days with consumed & active burned -->
+            <div class="weekly-days-list" id="weeklyDaysList">
+              <!-- Dynamically populated by renderWeeklyDaysBreakdown() -->
             </div>
           </div>
 

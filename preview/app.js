@@ -1468,16 +1468,110 @@ document.addEventListener('DOMContentLoaded', () => {
   const metricSleepTitle = document.getElementById('metricSleepTitle');
   const metricSleepSub = document.getElementById('metricSleepSub');
 
-  const weekNavigatorBar = document.getElementById('weekNavigatorBar');
-  const prevWeekBtn = document.getElementById('prevWeekBtn');
-  const nextWeekBtn = document.getElementById('nextWeekBtn');
-  const overviewWeekRangeText = document.getElementById('overviewWeekRangeText');
+  const weeklyBreakdownCard = document.getElementById('weeklyBreakdownCard');
+  const weeklyDaysList = document.getElementById('weeklyDaysList');
+  const weeklyBreakdownBadge = document.getElementById('weeklyBreakdownBadge');
+  const energyBalanceTitle = document.getElementById('energyBalanceTitle');
+  const overviewConsumedLbl = document.getElementById('overviewConsumedLbl');
+  const overviewBurnedLbl = document.getElementById('overviewBurnedLbl');
+  const weeklyAveragesRow = document.getElementById('weeklyAveragesRow');
+  const overviewAvgConsumed = document.getElementById('overviewAvgConsumed');
+  const overviewAvgBurned = document.getElementById('overviewAvgBurned');
 
   let currentOverviewPeriod = 'today';
   let overviewWeekOffset = 0; // 0 = This Week, 1 = Next Week, -1 = Prev Week
 
+  function getWeeklyTotals() {
+    const baseDate = getBaseDate();
+    const dayOfWeek = baseDate.getDay();
+    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+
+    const monday = new Date(baseDate);
+    monday.setDate(baseDate.getDate() + diffToMonday);
+
+    let curUser = null;
+    try {
+      curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+    } catch (e) {}
+    const email = curUser ? curUser.email : null;
+    const isDemo = email === 'alex.rivera@wellness.io';
+
+    let historyMap = {};
+    if (email) {
+      try {
+        historyMap = JSON.parse(localStorage.getItem('fittrack_history_' + email) || '{}');
+      } catch (e) {}
+    }
+
+    const todayStr = getTodayDateString();
+    let totalConsumed = 0;
+    let totalBurned = 0;
+
+    const demoDefaults = [
+      { consumed: 2150, burned: 420 },
+      { consumed: 1980, burned: 380 },
+      { consumed: 2240, burned: 450 },
+      { consumed: 2010, burned: 350 },
+      { consumed: 2320, burned: 490 },
+      { consumed: 1850, burned: 310 },
+      { consumed: 1720, burned: 260 }
+    ];
+
+    const todayDayIndex = (baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1);
+
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(monday);
+      dayDate.setDate(monday.getDate() + i);
+
+      const yyyy = dayDate.getFullYear();
+      const mm = String(dayDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(dayDate.getDate()).padStart(2, '0');
+      const dateKey = `${yyyy}-${mm}-${dd}`;
+
+      let dayConsumed = 0;
+      let dayBurned = 0;
+
+      if (dateKey === todayStr) {
+        dayConsumed = state.consumedCalories || 0;
+        dayBurned = state.activeBurned || 0;
+      } else if (historyMap[dateKey]) {
+        dayConsumed = historyMap[dateKey].consumed || 0;
+        dayBurned = historyMap[dateKey].burned || 0;
+      } else if (isDemo && dayDate < baseDate) {
+        dayConsumed = demoDefaults[i].consumed;
+        dayBurned = demoDefaults[i].burned;
+      }
+
+      totalConsumed += dayConsumed;
+      totalBurned += dayBurned;
+    }
+
+    const elapsedDays = Math.max(1, todayDayIndex + 1);
+    const avgConsumed = Math.round(totalConsumed / elapsedDays);
+    const avgBurned = Math.round(totalBurned / elapsedDays);
+
+    return {
+      totalConsumed,
+      totalBurned,
+      avgConsumed,
+      avgBurned,
+      elapsedDays
+    };
+  }
+
+  function getBaseDate() {
+    const todayStr = getTodayDateString();
+    if (todayStr) {
+      const parts = todayStr.split('-');
+      if (parts.length === 3) {
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      }
+    }
+    return new Date();
+  }
+
   function getWeekDateRangeString(offset = 0) {
-    const today = new Date();
+    const today = getBaseDate();
     const day = today.getDay();
     const diffToMonday = (day === 0 ? -6 : 1 - day) + (offset * 7);
 
@@ -1500,36 +1594,156 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${labelPrefix} (${monStr} - ${sunStr})`;
   }
 
+  function renderWeeklyDaysBreakdown(offset = 0) {
+    if (!weeklyDaysList) return;
+
+    const baseDate = getBaseDate();
+    const dayOfWeek = baseDate.getDay();
+    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek) + (offset * 7);
+
+    const monday = new Date(baseDate);
+    monday.setDate(baseDate.getDate() + diffToMonday);
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    if (weeklyBreakdownBadge) {
+      weeklyBreakdownBadge.textContent = `${monthNames[monday.getMonth()]} ${monday.getDate()} - ${monthNames[sunday.getMonth()]} ${sunday.getDate()}`;
+    }
+
+    let curUser = null;
+    try {
+      curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+    } catch (e) {}
+    const email = curUser ? curUser.email : null;
+    const isDemo = email === 'alex.rivera@wellness.io';
+
+    let historyMap = {};
+    if (email) {
+      try {
+        historyMap = JSON.parse(localStorage.getItem('fittrack_history_' + email) || '{}');
+      } catch (e) {}
+    }
+
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const todayStr = getTodayDateString();
+
+    let html = '';
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(monday);
+      dayDate.setDate(monday.getDate() + i);
+
+      const yyyy = dayDate.getFullYear();
+      const mm = String(dayDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(dayDate.getDate()).padStart(2, '0');
+      const dateKey = `${yyyy}-${mm}-${dd}`;
+
+      const dayName = dayNames[i];
+      const dateDisplay = `${monthNames[dayDate.getMonth()]} ${dayDate.getDate()}`;
+      const isToday = (dateKey === todayStr);
+
+      let consumed = 0;
+      let burned = 0;
+
+      if (isToday) {
+        consumed = state.consumedCalories || 0;
+        burned = state.activeBurned || 0;
+      } else if (historyMap[dateKey]) {
+        consumed = historyMap[dateKey].consumed || 0;
+        burned = historyMap[dateKey].burned || 0;
+      } else if (isDemo && offset === 0) {
+        const demoDefaults = [
+          { consumed: 2150, burned: 420 },
+          { consumed: 1980, burned: 380 },
+          { consumed: 2240, burned: 450 },
+          { consumed: 2010, burned: 350 },
+          { consumed: 2320, burned: 490 },
+          { consumed: 1850, burned: 310 },
+          { consumed: 1720, burned: 260 }
+        ];
+        if (dayDate < baseDate) {
+          consumed = demoDefaults[i].consumed;
+          burned = demoDefaults[i].burned;
+        }
+      }
+
+      html += `
+        <div class="weekly-day-card ${isToday ? 'current-day' : ''}">
+          <div class="weekly-day-top">
+            <div class="weekly-day-title-group">
+              <span class="weekly-day-name">${dayName}</span>
+              <span class="weekly-day-date">${dateDisplay}</span>
+            </div>
+            ${isToday ? '<span class="today-indicator-pill">Today • Active</span>' : ''}
+          </div>
+          <div class="weekly-day-metrics-row">
+            <div class="weekly-metric-item">
+              <div class="weekly-metric-icon bg-carbs-light">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="#EE924F">
+                  <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+                </svg>
+              </div>
+              <div class="weekly-metric-text">
+                <span class="weekly-metric-lbl">Calories Consumed</span>
+                <span class="weekly-metric-val" style="color: var(--accent-carbs);">${consumed.toLocaleString()} <small>kcal</small></span>
+              </div>
+            </div>
+            <div class="weekly-metric-divider"></div>
+            <div class="weekly-metric-item">
+              <div class="weekly-metric-icon bg-protein-light">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="#1D3F37">
+                  <path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/>
+                </svg>
+              </div>
+              <div class="weekly-metric-text">
+                <span class="weekly-metric-lbl">Active Burned</span>
+                <span class="weekly-metric-val" style="color: var(--pill-dark);">${burned.toLocaleString()} <small>kcal</small></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    weeklyDaysList.innerHTML = html;
+  }
+
   function updateOverviewMetrics() {
     const activeBurn = state.activeBurned || 0;
     const isZeroUser = state.consumedCalories === 0 && activeBurn === 0;
 
-    // 1. Instantly update Daily Energy Balance Card (Top of Overview)
     const overviewConsumed = document.getElementById('overviewConsumed');
     const overviewBurned = document.getElementById('overviewBurned');
     const energyBalanceNet = document.getElementById('energyBalanceNet');
     const balanceRatioConsumed = document.getElementById('balanceRatioConsumed');
     const balanceRatioBurned = document.getElementById('balanceRatioBurned');
 
-    if (overviewConsumed) {
-      overviewConsumed.textContent = `${state.consumedCalories.toLocaleString()} kcal`;
-    }
-    if (overviewBurned) {
-      overviewBurned.textContent = `${activeBurn.toLocaleString()} kcal`;
-    }
-    if (energyBalanceNet) {
-      const net = state.consumedCalories - activeBurn;
-      energyBalanceNet.textContent = `${net > 0 ? '+' : ''}${net.toLocaleString()} kcal Net`;
-    }
-    if (balanceRatioConsumed && balanceRatioBurned) {
-      const total = state.consumedCalories + activeBurn;
-      const consumedRatio = total > 0 ? Math.round((state.consumedCalories / total) * 100) : 0;
-      balanceRatioConsumed.style.width = `${consumedRatio}%`;
-      balanceRatioBurned.style.width = `${total > 0 ? 100 - consumedRatio : 0}%`;
-    }
-
     if (currentOverviewPeriod === 'today') {
-      if (weekNavigatorBar) weekNavigatorBar.style.display = 'none';
+      if (energyBalanceTitle) energyBalanceTitle.textContent = "Daily Energy Balance";
+      if (overviewConsumedLbl) overviewConsumedLbl.textContent = "Consumed";
+      if (overviewBurnedLbl) overviewBurnedLbl.textContent = "Active Burned";
+
+      if (overviewConsumed) {
+        overviewConsumed.textContent = `${state.consumedCalories.toLocaleString()} kcal`;
+      }
+      if (overviewBurned) {
+        overviewBurned.textContent = `${activeBurn.toLocaleString()} kcal`;
+      }
+      if (energyBalanceNet) {
+        const net = state.consumedCalories - activeBurn;
+        energyBalanceNet.textContent = `${net > 0 ? '+' : ''}${net.toLocaleString()} kcal Net`;
+      }
+      if (weeklyAveragesRow) weeklyAveragesRow.style.display = 'none';
+
+      if (balanceRatioConsumed && balanceRatioBurned) {
+        const total = state.consumedCalories + activeBurn;
+        const consumedRatio = total > 0 ? Math.round((state.consumedCalories / total) * 100) : 0;
+        balanceRatioConsumed.style.width = `${consumedRatio}%`;
+        balanceRatioBurned.style.width = `${total > 0 ? 100 - consumedRatio : 0}%`;
+      }
+
+      if (weeklyBreakdownCard) weeklyBreakdownCard.style.display = 'none';
       if (metricsGridHeading) metricsGridHeading.textContent = "Today's Health Metrics";
       if (metricCaloriesVal) metricCaloriesVal.textContent = activeBurn.toLocaleString();
       if (metricCaloriesTitle) metricCaloriesTitle.textContent = "Calories Burned";
@@ -1546,75 +1760,61 @@ document.addEventListener('DOMContentLoaded', () => {
       if (metricSleepTitle) metricSleepTitle.textContent = "Sleep Duration";
       if (metricSleepSub) metricSleepSub.textContent = "No sleep recorded yet";
     } else {
-      if (weekNavigatorBar) weekNavigatorBar.style.display = 'flex';
-      if (overviewWeekRangeText) overviewWeekRangeText.textContent = getWeekDateRangeString(overviewWeekOffset);
+      const weekData = getWeeklyTotals();
 
-      if (overviewWeekOffset === 0) {
-        if (metricsGridHeading) metricsGridHeading.textContent = "This Week's Aggregate Metrics";
-        if (metricCaloriesVal) metricCaloriesVal.textContent = activeBurn.toLocaleString();
-        if (metricCaloriesTitle) metricCaloriesTitle.textContent = "Calories Burned";
-        if (metricCaloriesSub) metricCaloriesSub.textContent = `${activeBurn.toLocaleString()} active kcal this week`;
+      if (energyBalanceTitle) energyBalanceTitle.textContent = "Weekly Energy Balance";
+      if (overviewConsumedLbl) overviewConsumedLbl.textContent = "Total Consumed";
+      if (overviewBurnedLbl) overviewBurnedLbl.textContent = "Total Burned";
 
-        let curUser = null;
-        try {
-          curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
-        } catch (e) {}
-        const isDemo = curUser && curUser.email === 'alex.rivera@wellness.io';
-
-        if (metricStepsVal) metricStepsVal.textContent = isDemo ? "82,641" : "0";
-        if (metricStepsSub) metricStepsSub.textContent = isDemo ? "steps (82% of weekly goal)" : "steps (0% of weekly goal)";
-
-        if (metricActiveMinsVal) metricActiveMinsVal.textContent = isDemo ? "558" : "0";
-        if (metricActiveMinsSub) metricActiveMinsSub.textContent = isDemo ? "min / weekly total" : "min / weekly total";
-
-        if (metricSleepVal) metricSleepVal.textContent = isDemo ? "51h 36m" : "0h 0m";
-        if (metricSleepTitle) metricSleepTitle.textContent = "Weekly Sleep";
-        if (metricSleepSub) metricSleepSub.textContent = isDemo ? "7h 22m daily avg" : "No weekly sleep recorded";
-      } else if (overviewWeekOffset > 0) {
-        if (metricsGridHeading) metricsGridHeading.textContent = `Upcoming Week Forecast (+${overviewWeekOffset})`;
-        if (metricCaloriesVal) metricCaloriesVal.textContent = "0";
-        if (metricCaloriesTitle) metricCaloriesTitle.textContent = "Calories Burned";
-        if (metricCaloriesSub) metricCaloriesSub.textContent = "Target 16,100 kcal • 0 logged yet";
-
-        if (metricStepsVal) metricStepsVal.textContent = "0";
-        if (metricStepsSub) metricStepsSub.textContent = "steps (Target: 70,000 steps)";
-
-        if (metricActiveMinsVal) metricActiveMinsVal.textContent = "0";
-        if (metricActiveMinsSub) metricActiveMinsSub.textContent = "min (Target: 315 active min)";
-
-        if (metricSleepVal) metricSleepVal.textContent = "0h 0m";
-        if (metricSleepTitle) metricSleepTitle.textContent = "Weekly Sleep";
-        if (metricSleepSub) metricSleepSub.textContent = "Target: 56h 0m total sleep";
-      } else {
-        if (metricsGridHeading) metricsGridHeading.textContent = `Previous Week (${overviewWeekOffset}) Summary`;
-        if (metricCaloriesVal) metricCaloriesVal.textContent = "15,840";
-        if (metricCaloriesTitle) metricCaloriesTitle.textContent = "Calories Burned";
-        if (metricCaloriesSub) metricCaloriesSub.textContent = "4,360 active • 11,480 resting";
-
-        if (metricStepsVal) metricStepsVal.textContent = "76,420";
-        if (metricStepsSub) metricStepsSub.textContent = "steps (109% of weekly goal)";
-
-        if (metricActiveMinsVal) metricActiveMinsVal.textContent = "490";
-        if (metricActiveMinsSub) metricActiveMinsSub.textContent = "min (Goal 315 min exceeded)";
-
-        if (metricSleepVal) metricSleepVal.textContent = "49h 45m";
-        if (metricSleepTitle) metricSleepTitle.textContent = "Weekly Sleep";
-        if (metricSleepSub) metricSleepSub.textContent = "7h 06m daily avg • 89% score";
+      if (overviewConsumed) {
+        overviewConsumed.textContent = `${weekData.totalConsumed.toLocaleString()} kcal`;
       }
-    }
-  }
+      if (overviewBurned) {
+        overviewBurned.textContent = `${weekData.totalBurned.toLocaleString()} kcal`;
+      }
+      if (energyBalanceNet) {
+        const net = weekData.totalConsumed - weekData.totalBurned;
+        energyBalanceNet.textContent = `${net > 0 ? '+' : ''}${net.toLocaleString()} kcal Net`;
+      }
+      if (weeklyAveragesRow) {
+        weeklyAveragesRow.style.display = 'flex';
+        if (overviewAvgConsumed) overviewAvgConsumed.textContent = `${weekData.avgConsumed.toLocaleString()} kcal/day`;
+        if (overviewAvgBurned) overviewAvgBurned.textContent = `${weekData.avgBurned.toLocaleString()} kcal/day`;
+      }
 
-  if (prevWeekBtn) {
-    prevWeekBtn.addEventListener('click', () => {
-      overviewWeekOffset--;
-      updateOverviewMetrics();
-    });
-  }
-  if (nextWeekBtn) {
-    nextWeekBtn.addEventListener('click', () => {
-      overviewWeekOffset++;
-      updateOverviewMetrics();
-    });
+      if (balanceRatioConsumed && balanceRatioBurned) {
+        const total = weekData.totalConsumed + weekData.totalBurned;
+        const consumedRatio = total > 0 ? Math.round((weekData.totalConsumed / total) * 100) : 0;
+        balanceRatioConsumed.style.width = `${consumedRatio}%`;
+        balanceRatioBurned.style.width = `${total > 0 ? 100 - consumedRatio : 0}%`;
+      }
+
+      if (weeklyBreakdownCard) {
+        weeklyBreakdownCard.style.display = 'block';
+        renderWeeklyDaysBreakdown(0);
+      }
+
+      if (metricsGridHeading) metricsGridHeading.textContent = "This Week's Aggregate Metrics";
+      if (metricCaloriesVal) metricCaloriesVal.textContent = weekData.totalBurned.toLocaleString();
+      if (metricCaloriesTitle) metricCaloriesTitle.textContent = "Calories Burned";
+      if (metricCaloriesSub) metricCaloriesSub.textContent = `${weekData.totalBurned.toLocaleString()} active kcal this week`;
+
+      let curUser = null;
+      try {
+        curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+      } catch (e) {}
+      const isDemo = curUser && curUser.email === 'alex.rivera@wellness.io';
+
+      if (metricStepsVal) metricStepsVal.textContent = isDemo ? "82,641" : "0";
+      if (metricStepsSub) metricStepsSub.textContent = isDemo ? "steps (82% of weekly goal)" : "steps (0% of weekly goal)";
+
+      if (metricActiveMinsVal) metricActiveMinsVal.textContent = isDemo ? "558" : "0";
+      if (metricActiveMinsSub) metricActiveMinsSub.textContent = isDemo ? "min / weekly total" : "min / weekly total";
+
+      if (metricSleepVal) metricSleepVal.textContent = isDemo ? "51h 36m" : "0h 0m";
+      if (metricSleepTitle) metricSleepTitle.textContent = "Weekly Sleep";
+      if (metricSleepSub) metricSleepSub.textContent = isDemo ? "7h 22m daily avg" : "No weekly sleep recorded";
+    }
   }
 
   overviewPeriodTabs.forEach(tab => {
@@ -2034,6 +2234,16 @@ document.addEventListener('DOMContentLoaded', () => {
       lunchHtml: lunchItemList ? lunchItemList.innerHTML : ''
     };
     localStorage.setItem('fittrack_data_' + email, JSON.stringify(userData));
+
+    try {
+      const histKey = 'fittrack_history_' + email;
+      const history = JSON.parse(localStorage.getItem(histKey) || '{}');
+      history[todayStr] = {
+        consumed: state.consumedCalories || 0,
+        burned: state.activeBurned || 0
+      };
+      localStorage.setItem(histKey, JSON.stringify(history));
+    } catch (e) {}
   }
 
   // Load user-specific tracking state
