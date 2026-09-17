@@ -77,6 +77,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggleFrameBtn = document.getElementById('toggleFrameBtn');
   const phoneFrame = document.getElementById('phoneFrame');
 
+  // Developer Mode Query Parameter (?dev=true or ?debug=1)
+  try {
+    const devUrlParams = new URLSearchParams(window.location.search);
+    if (devUrlParams.get('dev') === 'true' || devUrlParams.get('debug') === '1') {
+      const devHeader = document.querySelector('.dev-header');
+      if (devHeader) devHeader.classList.add('force-show');
+    }
+  } catch(e) {}
+
   // Day Rollover & Date Utilities
   function getTodayDateString() {
     const simulated = localStorage.getItem('fittrack_simulated_date');
