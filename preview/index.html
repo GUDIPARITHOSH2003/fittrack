@@ -14,8 +14,18 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="FitTrack">
-  <link rel="icon" type="image/svg+xml" href="/icon.svg">
-  <link rel="apple-touch-icon" href="/icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then(function(reg) { console.log('[FitTrack PWA] SW registered:', reg.scope); })
+          .catch(function(err) { console.warn('[FitTrack PWA] SW failed:', err); });
+      });
+    }
+  </script>
   <!-- Official Google Identity Services SDK for Web & Native OAuth -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
