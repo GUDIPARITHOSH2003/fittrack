@@ -414,6 +414,194 @@ function calculateLocalSmartNutrition(rawName, qty, unit) {
   };
 }
 
+async function callGeminiNlpMeal(apiKey, text) {
+  const systemPrompt = `You are a certified clinical sports dietitian and precise meal logging parser.
+The user enters natural language to log food or a meal (e.g. "chicken breast with quantity of 100gm", "2 boiled eggs and toast", "banana", "chicken breast", "asdfghjk").
+
+Rules:
+1. If the input is nonsense, gibberish (e.g. "asdfgh", "zxcv", "qweqwe"), greeting, non-food object, or unrecognizable as food, respond ONLY with:
+{
+  "isFood": false,
+  "error": "Please enter a valid food or meal name (e.g. '100g chicken breast' or '2 boiled eggs')."
+}
+2. If it IS an edible food, drink, or meal:
+- Extract or standardize the food name.
+- If the user specified a quantity and unit, calculate based on that portion.
+- IF THE USER ONLY ENTERED THE FOOD NAME WITHOUT A QUANTITY (e.g. "chicken breast" or "white rice"), DEFAULT TO 100g (or 1 item/piece for whole foods like banana, egg, apple).
+- Calculate realistic calories, protein, carbs, fats, fiber based on USDA data.
+- Return strictly valid JSON:
+{
+  "isFood": true,
+  "name": "Standardized Food Name (e.g. Cooked Chicken Breast)",
+  "portion": "100g",
+  "calories": 165,
+  "protein": 31.0,
+  "carbs": 0.0,
+  "fats": 3.6,
+  "fiber": 0.0,
+  "confidence": "high",
+  "summary": "Short 1-line nutritional summary"
+}`;
+
+  const userPrompt = `Input: "${text}"`;
+  let lastError = null;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      console.log(`[Google Gemini NLP] Querying model ${model} for "${text}"...`);
+      const bodyPayload = JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: `${systemPrompt}\n\n${userPrompt}` }
+            ]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: "application/json",
+          temperature: 0.1
+        }
+      });
+
+      const responseText = await new Promise((resolve, reject) => {
+        const req = https.request({
+          hostname: 'generativelanguage.googleapis.com',
+          path: `/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 10000
+        }, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(data);
+            } else {
+              reject(new Error(`Gemini HTTP ${res.statusCode}: ${data}`));
+            }
+          });
+        });
+
+        req.on('error', reject);
+        req.on('timeout', () => {
+          req.destroy();
+          reject(new Error(`Gemini timeout with model ${model}`));
+        });
+        req.write(bodyPayload);
+        req.end();
+      });
+
+      const parsedRes = JSON.parse(responseText);
+      const textPart = parsedRes?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textPart) throw new Error('Empty response from Gemini');
+
+      let cleanJson = textPart.trim();
+      if (cleanJson.startsWith('```')) {
+        cleanJson = cleanJson.replace(/^```(json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      }
+      const match = cleanJson.match(/\{[\s\S]*\}/);
+      if (match) cleanJson = match[0];
+
+      const json = JSON.parse(cleanJson);
+      if (json.isFood === false) {
+        return { isFood: false, error: json.error || "Please enter a valid food or meal name (e.g. '100g chicken breast')." };
+      }
+
+      return {
+        isFood: true,
+        source: 'gemini',
+        model: model,
+        data: {
+          name: json.name || text,
+          portion: json.portion || '100g',
+          calories: Math.round(Number(json.calories) || 0),
+          protein: Math.round((Number(json.protein) || 0) * 10) / 10,
+          carbs: Math.round((Number(json.carbs) || 0) * 10) / 10,
+          fats: Math.round((Number(json.fats) || 0) * 10) / 10,
+          fiber: Math.round((Number(json.fiber) || 0) * 10) / 10,
+          confidence: json.confidence || 'high',
+          summary: json.summary || `AI estimated nutrition for ${json.name || text}`
+        }
+      };
+    } catch (err) {
+      console.warn(`[Google Gemini NLP] Model ${model} failed:`, err.message);
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('All Gemini NLP models failed');
+}
+
+function parseMealTextLocal(text) {
+  if (!text || typeof text !== 'string') {
+    return { isFood: false, error: 'Please enter a valid food or meal name (e.g. "100g chicken breast" or "2 boiled eggs").' };
+  }
+  const clean = text.trim();
+  if (clean.length < 2) {
+    return { isFood: false, error: 'Please enter a valid food or meal name (e.g. "100g chicken breast" or "2 boiled eggs").' };
+  }
+
+  // Check for non-food / greeting / random words
+  const words = clean.toLowerCase().split(/\s+/);
+  const nonFoodKeywords = ['hi', 'hello', 'hey', 'test', 'asdf', 'qwer', 'zxcv', 'laptop', 'phone', 'car', 'bike', 'tv', 'watch', 'book', 'game', 'play', 'movie'];
+  if (words.some(w => nonFoodKeywords.includes(w))) {
+    return { isFood: false, error: 'Please enter a valid food or meal name (e.g. "100g chicken breast" or "2 boiled eggs").' };
+  }
+
+  const alphaOnly = clean.replace(/[^a-zA-Z]/g, '');
+  if (alphaOnly.length < 2) {
+    return { isFood: false, error: 'Please enter a valid food or meal name (e.g. "100g chicken breast" or "2 boiled eggs").' };
+  }
+  if (alphaOnly.length >= 3 && !/[aeiouy]/i.test(alphaOnly)) {
+    return { isFood: false, error: 'Please enter a valid food or meal name (e.g. "100g chicken breast" or "2 boiled eggs").' };
+  }
+  if (/[bcdfghjklmnpqrstvwxyz]{5,}/i.test(alphaOnly)) {
+    return { isFood: false, error: 'Please enter a valid food or meal name (e.g. "100g chicken breast" or "2 boiled eggs").' };
+  }
+
+  // Extract quantity and unit
+  let qty = null;
+  let unit = null;
+  let foodName = clean;
+
+  const qtyUnitRegex = /(?:quantity\s*(?:of\s*)?)?(\d+(?:\.\d+)?)\s*(gm|g|grams?|kg|oz|cups?|tbsp|pcs?|pieces?|items?|slices?|servings?)?/i;
+  const match = clean.match(qtyUnitRegex);
+  if (match && match[1]) {
+    qty = parseFloat(match[1]);
+    const rawUnit = (match[2] || '').toLowerCase();
+    if (rawUnit.startsWith('g')) unit = 'g';
+    else if (rawUnit === 'kg') { qty = qty * 1000; unit = 'g'; }
+    else if (rawUnit.startsWith('oz')) unit = 'oz';
+    else if (rawUnit.startsWith('cup')) unit = 'cup';
+    else if (rawUnit.startsWith('tbsp')) unit = 'tbsp';
+    else if (rawUnit.startsWith('pc') || rawUnit.startsWith('item') || rawUnit.startsWith('slice') || rawUnit.startsWith('serving')) unit = 'pcs';
+
+    foodName = clean.replace(match[0], '').replace(/\b(with|quantity|of|in|and|portion)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  if (!foodName) foodName = clean;
+  const foodLetters = foodName.replace(/[^a-zA-Z]/g, '');
+  if (foodLetters.length < 2) {
+    return { isFood: false, error: 'Please enter a valid food or meal name (e.g. "100g chicken breast" or "2 boiled eggs").' };
+  }
+
+  // If user only entered item name (no quantity), default to 100g (or 1 piece for whole fruits/eggs)
+  if (!qty || isNaN(qty)) {
+    const isPcsFood = /(banana|apple|egg|orange|toast|bread|cookie|burger|pizza|roti|chapati)/i.test(foodName);
+    qty = isPcsFood ? 1 : 100;
+    if (!unit) unit = isPcsFood ? 'pcs' : 'g';
+  } else if (!unit) {
+    const isPcsFood = /(banana|apple|egg|orange|toast|bread|cookie|burger|pizza|roti|chapati)/i.test(foodName);
+    unit = isPcsFood ? 'pcs' : 'g';
+  }
+
+  const nutrients = calculateLocalSmartNutrition(foodName, qty, unit);
+  return {
+    isFood: true,
+    source: 'smart_database',
+    data: nutrients
+  };
+}
+
 // Ensure data directory exists
 if (!fs.existsSync(path.join(__dirname, 'data'))) {
   fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
@@ -1551,6 +1739,46 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('[API] Error in nutrition lookup:', err);
       return sendJson(res, 500, { success: false, message: 'Nutrition lookup failed' });
+    }
+  }
+
+  // 12d. POST /api/ai/nlp-meal-parse (Parse natural language meal e.g. "chicken breast with quantity of 100gm")
+  if (pathname === '/api/ai/nlp-meal-parse' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody(req);
+      const text = (body.text || body.query || body.meal || '').trim();
+      if (!text) {
+        return sendJson(res, 200, { success: false, isFood: false, error: 'Please enter a food item or meal name.' });
+      }
+
+      const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
+      if (geminiKey) {
+        try {
+          const aiRes = await callGeminiNlpMeal(geminiKey, text);
+          if (aiRes.isFood === false) {
+            return sendJson(res, 200, { success: false, isFood: false, error: aiRes.error });
+          }
+          return sendJson(res, 200, { success: true, isFood: true, source: 'gemini', data: aiRes.data });
+        } catch (geminiErr) {
+          console.warn('[Gemini NLP] Live API failed, using smart parser:', geminiErr.message);
+        }
+      }
+
+      // Local smart parser fallback
+      const localRes = parseMealTextLocal(text);
+      if (localRes.isFood === false) {
+        return sendJson(res, 200, { success: false, isFood: false, error: localRes.error });
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        isFood: true,
+        source: 'smart_database',
+        data: localRes.data
+      });
+    } catch (err) {
+      console.error('[API] Error in NLP meal parse:', err);
+      return sendJson(res, 500, { success: false, isFood: false, error: 'Failed to process meal input' });
     }
   }
 

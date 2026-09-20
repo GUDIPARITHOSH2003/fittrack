@@ -571,30 +571,119 @@ document.addEventListener('DOMContentLoaded', () => {
     if (curUser && curUser.email) saveUserData(curUser.email);
   }
 
-  // AI NLP Meal Input
-  function handleAiSubmit() {
-    const text = aiInput.value.trim();
-    if (!text) return;
+  // AI NLP Meal Input & Validation Elements
+  const aiMealInputCard = document.getElementById('aiMealInputCard');
+  const aiNlpErrorPopup = document.getElementById('aiNlpErrorPopup');
+  const aiNlpErrorText = document.getElementById('aiNlpErrorText');
+  const closeAiNlpErrorBtn = document.getElementById('closeAiNlpErrorBtn');
+  let aiErrorTimeout = null;
 
-    aiSubmitBtn.innerHTML = `<span style="font-size:10px;">...</span>`;
+  function showAiNlpError(msg) {
+    const errorMsg = msg || 'Please enter a valid food or meal (e.g. "100g chicken breast" or "2 boiled eggs").';
+    if (aiNlpErrorPopup) {
+      if (aiNlpErrorText) aiNlpErrorText.textContent = errorMsg;
+      aiNlpErrorPopup.style.display = 'flex';
+      if (aiErrorTimeout) clearTimeout(aiErrorTimeout);
+      aiErrorTimeout = setTimeout(() => {
+        aiNlpErrorPopup.style.display = 'none';
+      }, 6000);
+    }
+    if (aiMealInputCard) {
+      aiMealInputCard.style.transition = 'all 0.25s ease';
+      aiMealInputCard.style.border = '2px solid #EF4444';
+      aiMealInputCard.style.boxShadow = '0 0 0 4px rgba(239, 68, 68, 0.2)';
+      setTimeout(() => {
+        aiMealInputCard.style.border = '';
+        aiMealInputCard.style.boxShadow = '';
+      }, 2500);
+    }
+    if (typeof showToast === 'function') {
+      showToast(`⚠️ ${errorMsg}`);
+    }
+    if (aiInput) aiInput.focus();
+  }
+
+  function hideAiNlpError() {
+    if (aiNlpErrorPopup) aiNlpErrorPopup.style.display = 'none';
+    if (aiMealInputCard) {
+      aiMealInputCard.style.border = '';
+      aiMealInputCard.style.boxShadow = '';
+    }
+  }
+
+  if (closeAiNlpErrorBtn) {
+    closeAiNlpErrorBtn.addEventListener('click', hideAiNlpError);
+  }
+
+  if (aiInput) {
+    aiInput.addEventListener('input', () => {
+      if (aiNlpErrorPopup && aiNlpErrorPopup.style.display !== 'none') {
+        hideAiNlpError();
+      }
+    });
+  }
+
+  async function handleAiSubmit() {
+    const text = (aiInput.value || '').trim();
+    if (!text) {
+      showAiNlpError('Please enter a food item or meal first (e.g. "100g chicken breast" or "banana").');
+      return;
+    }
+
+    hideAiNlpError();
+    aiSubmitBtn.innerHTML = `<span style="font-size:12px;">⏳</span>`;
     aiSubmitBtn.disabled = true;
 
-    setTimeout(() => {
-      // Simulating NLP parser
-      const lower = text.toLowerCase();
-      let cal = 240, p = 14, c = 26, f = 8;
-      if (lower.includes('egg')) { cal = 260; p = 16; c = 24; f = 10; }
-      else if (lower.includes('shake') || lower.includes('protein')) { cal = 210; p = 30; c = 12; f = 3; }
-      else if (lower.includes('salad')) { cal = 180; p = 8; c = 16; f = 9; }
-      else if (lower.includes('pizza') || lower.includes('burger')) { cal = 550; p = 24; c = 60; f = 22; }
+    try {
+      const res = await fetch('/api/ai/nlp-meal-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
 
-      const capitalized = text.charAt(0).toUpperCase() + text.slice(1);
-      logFoodItem(capitalized, '1 serving (AI estimated)', cal, p, c, f);
+      const json = await res.json();
+
+      if (!json.isFood || !json.data) {
+        showAiNlpError(json.error || 'Please enter a valid food or meal (e.g. "100g chicken breast" or "2 boiled eggs").');
+        return;
+      }
+
+      const item = json.data;
+
+      // Automatically determine meal slot according to the time of day
+      const currentHour = new Date().getHours();
+      let autoMeal = 'snack';
+      if (currentHour >= 5 && currentHour < 11) autoMeal = 'breakfast';
+      else if (currentHour >= 11 && currentHour < 16) autoMeal = 'lunch';
+      else if (currentHour >= 16 && currentHour < 19) autoMeal = 'snack';
+      else if (currentHour >= 19 && currentHour < 24) autoMeal = 'dinner';
+
+      const prevTargetMeal = currentTargetMeal;
+      currentTargetMeal = autoMeal;
+
+      logFoodItem(
+        item.name,
+        item.portion || '1 serving',
+        item.calories,
+        item.protein,
+        item.carbs,
+        item.fats,
+        item.fiber || 0
+      );
+
+      currentTargetMeal = prevTargetMeal;
 
       aiInput.value = '';
+      if (typeof showToast === 'function') {
+        showToast(`✨ Logged ${item.portion} ${item.name} to ${autoMeal.toUpperCase()} (+${item.calories} kcal, ${item.protein}g P)!`);
+      }
+    } catch (err) {
+      console.warn('[FitTrack AI] NLP submit error:', err);
+      showAiNlpError('Connection error while analyzing meal. Please try again.');
+    } finally {
       aiSubmitBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`;
       aiSubmitBtn.disabled = false;
-    }, 450);
+    }
   }
 
   aiSubmitBtn.addEventListener('click', handleAiSubmit);
