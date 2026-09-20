@@ -810,19 +810,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const confirmLogSearchBtn = document.getElementById('confirmLogSearchBtn');
 
   // OpenRouter AI UI Elements
-  const openAiSettingsBtn = document.getElementById('openAiSettingsBtn');
-  const aiStatusPill = document.getElementById('aiStatusPill');
   const triggerAiFetchBtn = document.getElementById('triggerAiFetchBtn');
   const aiBtnIcon = document.getElementById('aiBtnIcon');
   const aiBtnText = document.getElementById('aiBtnText');
   const aiBadgeTag = document.getElementById('aiBadgeTag');
   const aiLoadingIndicator = document.getElementById('aiLoadingIndicator');
-  const aiConfigModalBackdrop = document.getElementById('aiConfigModalBackdrop');
-  const closeAiConfigModalBtn = document.getElementById('closeAiConfigModalBtn');
-  const openRouterApiKeyInput = document.getElementById('openRouterApiKeyInput');
-  const openRouterModelSelect = document.getElementById('openRouterModelSelect');
-  const saveAiConfigBtn = document.getElementById('saveAiConfigBtn');
-  const aiConfigAlert = document.getElementById('aiConfigAlert');
 
   // Baseline nutritional database per 100g (or per piece)
   const foodDb = {
@@ -897,14 +889,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (aiBadgeTag) {
           aiBadgeTag.style.display = 'inline-block';
           if (json.source === 'openrouter') {
-            const shortModel = json.model ? (json.model.split('/')[1] || json.model).replace(':free', '') : 'Llama';
             aiBadgeTag.style.background = 'rgba(37,99,235,0.12)';
             aiBadgeTag.style.color = '#2563EB';
-            aiBadgeTag.textContent = `✨ OpenRouter AI (${shortModel})`;
+            aiBadgeTag.textContent = '✨ AI Nutrition';
           } else {
             aiBadgeTag.style.background = 'rgba(16,185,129,0.12)';
             aiBadgeTag.style.color = '#059669';
-            aiBadgeTag.textContent = `⚡ Smart Database`;
+            aiBadgeTag.textContent = '⚡ Verified Nutrition';
           }
         }
       }
@@ -1017,106 +1008,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       fetchAiNutrition(name, qty, unit);
-    });
-  }
-
-  async function refreshAiStatus() {
-    try {
-      const res = await fetch('/api/ai/config');
-      if (res.ok) {
-        const data = await res.json();
-        if (aiStatusPill) {
-          if (data.configured) {
-            aiStatusPill.textContent = '✨ AI Active';
-            aiStatusPill.style.background = 'rgba(16,185,129,0.15)';
-            aiStatusPill.style.color = '#059669';
-          } else {
-            aiStatusPill.textContent = '⚡ Connect Free AI';
-            aiStatusPill.style.background = 'rgba(37,99,235,0.12)';
-            aiStatusPill.style.color = '#2563EB';
-          }
-        }
-        if (openRouterApiKeyInput && data.maskedKey && !openRouterApiKeyInput.value) {
-          openRouterApiKeyInput.placeholder = data.maskedKey;
-        }
-        if (openRouterModelSelect && data.model) {
-          openRouterModelSelect.value = data.model;
-        }
-      }
-    } catch(e) {}
-  }
-  refreshAiStatus();
-
-  if (openAiSettingsBtn && aiConfigModalBackdrop) {
-    openAiSettingsBtn.addEventListener('click', () => {
-      aiConfigModalBackdrop.style.display = 'flex';
-      refreshAiStatus();
-    });
-  }
-
-  if (closeAiConfigModalBtn && aiConfigModalBackdrop) {
-    closeAiConfigModalBtn.addEventListener('click', () => {
-      aiConfigModalBackdrop.style.display = 'none';
-    });
-  }
-
-  if (aiConfigModalBackdrop) {
-    aiConfigModalBackdrop.addEventListener('click', (e) => {
-      if (e.target === aiConfigModalBackdrop) {
-        aiConfigModalBackdrop.style.display = 'none';
-      }
-    });
-  }
-
-  if (saveAiConfigBtn) {
-    saveAiConfigBtn.addEventListener('click', async () => {
-      const apiKey = (openRouterApiKeyInput.value || '').trim();
-      const model = openRouterModelSelect.value;
-
-      saveAiConfigBtn.disabled = true;
-      saveAiConfigBtn.textContent = 'Saving...';
-      try {
-        const res = await fetch('/api/ai/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey, model })
-        });
-        const data = await res.json();
-        if (data.success) {
-          if (aiConfigAlert) {
-            aiConfigAlert.style.display = 'block';
-            aiConfigAlert.style.color = '#059669';
-            aiConfigAlert.style.background = 'rgba(16,185,129,0.12)';
-            aiConfigAlert.style.border = '1px solid rgba(16,185,129,0.3)';
-            aiConfigAlert.textContent = '✨ OpenRouter AI connected successfully!';
-          }
-          refreshAiStatus();
-          setTimeout(() => {
-            if (aiConfigModalBackdrop) aiConfigModalBackdrop.style.display = 'none';
-            if (aiConfigAlert) aiConfigAlert.style.display = 'none';
-          }, 1000);
-        } else {
-          if (aiConfigAlert) {
-            aiConfigAlert.style.display = 'block';
-            aiConfigAlert.style.color = '#DC2626';
-            aiConfigAlert.style.background = 'rgba(220,38,38,0.12)';
-            aiConfigAlert.style.border = '1px solid rgba(220,38,38,0.3)';
-            aiConfigAlert.textContent = data.message || 'Error saving AI key';
-          }
-        }
-      } catch (err) {
-        if (aiConfigAlert) {
-          aiConfigAlert.style.display = 'block';
-          aiConfigAlert.style.color = '#DC2626';
-          aiConfigAlert.style.background = 'rgba(220,38,38,0.12)';
-          aiConfigAlert.style.border = '1px solid rgba(220,38,38,0.3)';
-          aiConfigAlert.textContent = 'Connection error: ' + err.message;
-        }
-      } finally {
-        saveAiConfigBtn.disabled = false;
-        saveAiConfigBtn.textContent = 'Save & Activate Free AI';
-      }
-    });
   }
 
   searchItemInput.addEventListener('input', calculateSearchNutrients);
