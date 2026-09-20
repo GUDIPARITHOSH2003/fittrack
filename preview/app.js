@@ -379,7 +379,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  let currentTargetMeal = 'snack';
+  // Automatic meal determination based on time of day:
+  // Breakfast: 5:00 AM - 11:30 AM
+  // Lunch: 11:30 AM - 3:00 PM (15:00)
+  // Snack: 3:00 PM (15:00) - 6:00 PM (18:00) (as requested: between 3 to 6)
+  // Dinner: 6:00 PM (18:00) - 11:00 PM (23:00)
+  // Late night (11:00 PM - 5:00 AM): Snack
+  function getAutoMealTypeByTime() {
+    const now = new Date();
+    const timeVal = now.getHours() + (now.getMinutes() / 60);
+    if (timeVal >= 5.0 && timeVal < 11.5) {
+      return 'breakfast';
+    } else if (timeVal >= 11.5 && timeVal < 15.0) {
+      return 'lunch';
+    } else if (timeVal >= 15.0 && timeVal < 18.0) {
+      return 'snack';
+    } else if (timeVal >= 18.0 && timeVal < 23.0) {
+      return 'dinner';
+    } else {
+      return 'snack';
+    }
+  }
+
+  let currentTargetMeal = getAutoMealTypeByTime();
 
   function createMealItemHtml(name, portion, calories, protein, carbs, fats, fiber = 0, mealType = 'snack') {
     const fibStr = fiber > 0 ? ` • Fib: ${fiber}g` : '';
@@ -538,7 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.fiber = (state.fiber || 0) + fiber;
 
     let targetList = snackItemList;
-    const mealType = currentTargetMeal || 'snack';
+    const mealType = currentTargetMeal || getAutoMealTypeByTime();
     if (mealType === 'breakfast') {
       targetList = document.getElementById('breakfastItemList');
       state.breakfastCalories = (state.breakfastCalories || 0) + calories;
@@ -651,13 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const item = json.data;
 
       // Automatically determine meal slot according to the time of day
-      const currentHour = new Date().getHours();
-      let autoMeal = 'snack';
-      if (currentHour >= 5 && currentHour < 11) autoMeal = 'breakfast';
-      else if (currentHour >= 11 && currentHour < 16) autoMeal = 'lunch';
-      else if (currentHour >= 16 && currentHour < 19) autoMeal = 'snack';
-      else if (currentHour >= 19 && currentHour < 24) autoMeal = 'dinner';
-
+      const autoMeal = getAutoMealTypeByTime();
       const prevTargetMeal = currentTargetMeal;
       currentTargetMeal = autoMeal;
 
@@ -699,7 +715,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const p = parseInt(chip.dataset.p, 10);
       const c = parseInt(chip.dataset.c, 10);
       const f = parseInt(chip.dataset.f, 10);
+      const prevMeal = currentTargetMeal;
+      currentTargetMeal = getAutoMealTypeByTime();
       logFoodItem(meal, 'Standard serving', cal, p, c, f);
+      currentTargetMeal = prevMeal;
     });
   });
 
@@ -780,20 +799,24 @@ document.addEventListener('DOMContentLoaded', () => {
     scanModalBackdrop.classList.remove('show');
   }
 
-  centerScanBtn.addEventListener('click', openScanner);
+  centerScanBtn.addEventListener('click', () => {
+    currentTargetMeal = getAutoMealTypeByTime();
+    openScanner();
+  });
   closeScanModal.addEventListener('click', closeScanner);
   openScannerTriggers.forEach(btn => {
     btn.addEventListener('click', (e) => {
       const card = btn.closest('.meal-card');
       if (card) {
         const nameEl = card.querySelector('.meal-name');
-        const txt = nameEl ? nameEl.textContent.trim().toLowerCase() : 'snack';
+        const txt = nameEl ? nameEl.textContent.trim().toLowerCase() : '';
         if (txt.includes('breakfast')) currentTargetMeal = 'breakfast';
         else if (txt.includes('lunch')) currentTargetMeal = 'lunch';
         else if (txt.includes('dinner')) currentTargetMeal = 'dinner';
-        else currentTargetMeal = 'snack';
+        else if (txt.includes('snack')) currentTargetMeal = 'snack';
+        else currentTargetMeal = getAutoMealTypeByTime();
       } else {
-        currentTargetMeal = 'snack';
+        currentTargetMeal = getAutoMealTypeByTime();
       }
       openScanner();
     });
