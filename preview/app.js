@@ -1008,6 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       fetchAiNutrition(name, qty, unit);
+    });
   }
 
   searchItemInput.addEventListener('input', calculateSearchNutrients);
