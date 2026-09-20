@@ -888,7 +888,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (aiBadgeTag) {
           aiBadgeTag.style.display = 'inline-block';
-          if (json.source === 'openrouter') {
+          if (json.source === 'gemini' || json.source === 'openrouter') {
             aiBadgeTag.style.background = 'rgba(37,99,235,0.12)';
             aiBadgeTag.style.color = '#2563EB';
             aiBadgeTag.textContent = '✨ AI Nutrition';

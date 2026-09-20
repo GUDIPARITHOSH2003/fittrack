@@ -112,6 +112,115 @@ function saveAiConfig(config) {
   }
 }
 
+const GEMINI_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.0-flash-lite'
+];
+
+async function callGeminiAi(apiKey, foodQuery, quantity, unit) {
+  const systemPrompt = `You are a certified clinical sports dietitian and precise nutrition database AI.
+The user provides a food name and portion (quantity & unit).
+Calculate the realistic nutritional breakdown based on USDA FoodData Central and standard food composition data.
+Respond strictly with valid JSON only matching this format:
+{
+  "name": "Standardized Food Name (e.g. Cooked Chicken Breast)",
+  "portion": "${quantity} ${unit}",
+  "calories": 248,
+  "protein": 46.5,
+  "carbs": 0.0,
+  "fats": 5.4,
+  "fiber": 0.0,
+  "confidence": "high",
+  "summary": "Short 1-line nutritional summary"
+}`;
+
+  const userPrompt = `Food: "${foodQuery}", Quantity: ${quantity || 100}, Unit: "${unit || 'g'}"`;
+  let lastError = null;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      console.log(`[Google Gemini AI] Querying model ${model} for "${foodQuery}"...`);
+      const bodyPayload = JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: `${systemPrompt}\n\n${userPrompt}` }
+            ]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: "application/json",
+          temperature: 0.1
+        }
+      });
+
+      const responseText = await new Promise((resolve, reject) => {
+        const req = https.request({
+          hostname: 'generativelanguage.googleapis.com',
+          path: `/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(data);
+            } else {
+              reject(new Error(`Gemini HTTP ${res.statusCode}: ${data}`));
+            }
+          });
+        });
+
+        req.on('error', reject);
+        req.on('timeout', () => {
+          req.destroy();
+          reject(new Error(`Gemini timeout with model ${model}`));
+        });
+        req.write(bodyPayload);
+        req.end();
+      });
+
+      const parsedRes = JSON.parse(responseText);
+      const text = parsedRes?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('Empty response text from Gemini');
+
+      let cleanJson = text.trim();
+      if (cleanJson.startsWith('```')) {
+        cleanJson = cleanJson.replace(/^```(json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      }
+      const match = cleanJson.match(/\{[\s\S]*\}/);
+      if (match) cleanJson = match[0];
+
+      const nutritionData = JSON.parse(cleanJson);
+      return {
+        success: true,
+        source: 'gemini',
+        model: model,
+        data: {
+          name: nutritionData.name || foodQuery,
+          portion: nutritionData.portion || `${quantity} ${unit}`,
+          calories: Math.round(Number(nutritionData.calories) || 0),
+          protein: Math.round((Number(nutritionData.protein) || 0) * 10) / 10,
+          carbs: Math.round((Number(nutritionData.carbs) || 0) * 10) / 10,
+          fats: Math.round((Number(nutritionData.fats) || 0) * 10) / 10,
+          fiber: Math.round((Number(nutritionData.fiber) || 0) * 10) / 10,
+          confidence: nutritionData.confidence || 'high',
+          summary: nutritionData.summary || `Calculated nutrition for ${quantity} ${unit} of ${foodQuery}`
+        }
+      };
+    } catch (err) {
+      console.warn(`[Google Gemini AI] Model ${model} failed:`, err.message);
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('All Gemini models failed');
+}
+
 const OPENROUTER_FREE_MODELS = [
   'meta-llama/llama-3.2-3b-instruct:free',
   'google/gemini-2.0-flash-lite-preview-02-05:free',
@@ -1402,34 +1511,39 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { success: false, message: 'Food item query is required' });
       }
 
+      const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
       const config = getAiConfig();
-      const apiKey = (process.env.OPENROUTER_API_KEY || (config && config.apiKey) || '').trim();
+      const openRouterKey = (process.env.OPENROUTER_API_KEY || (config && config.apiKey) || '').trim();
       const defaultModel = process.env.OPENROUTER_MODEL || (config && config.model) || 'meta-llama/llama-3.2-3b-instruct:free';
 
-      if (apiKey) {
+      // 1. Prioritize Google Gemini Free API if configured
+      if (geminiKey) {
         try {
-          const aiResult = await callOpenRouterAi(apiKey, foodQuery, quantity, unit, preferredModel || defaultModel);
+          const aiResult = await callGeminiAi(geminiKey, foodQuery, quantity, unit);
+          return sendJson(res, 200, aiResult);
+        } catch (geminiErr) {
+          console.warn('[Google Gemini AI] Request failed, trying backup providers:', geminiErr.message);
+        }
+      }
+
+      // 2. Try OpenRouter Free AI if configured
+      if (openRouterKey) {
+        try {
+          const aiResult = await callOpenRouterAi(openRouterKey, foodQuery, quantity, unit, preferredModel || defaultModel);
           return sendJson(res, 200, aiResult);
         } catch (aiErr) {
           console.warn('[OpenRouter AI] Live API error, falling back to smart database:', aiErr.message);
-          const fallback = calculateLocalSmartNutrition(foodQuery, quantity, unit);
-          return sendJson(res, 200, {
-            success: true,
-            source: 'smart_database',
-            model: 'Clinical Nutrition Database',
-            data: fallback
-          });
         }
-      } else {
-        // Backend key not yet set: seamless verified nutrition database calculation
-        const fallback = calculateLocalSmartNutrition(foodQuery, quantity, unit);
-        return sendJson(res, 200, {
-          success: true,
-          source: 'smart_database',
-          model: 'Clinical Nutrition Database',
-          data: fallback
-        });
       }
+
+      // 3. Fallback: Instant verified clinical nutrition database
+      const fallback = calculateLocalSmartNutrition(foodQuery, quantity, unit);
+      return sendJson(res, 200, {
+        success: true,
+        source: 'smart_database',
+        model: 'Clinical Nutrition Database',
+        data: fallback
+      });
     } catch (err) {
       console.error('[API] Error in nutrition lookup:', err);
       return sendJson(res, 500, { success: false, message: 'Nutrition lookup failed' });
