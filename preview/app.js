@@ -809,9 +809,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const prevFib = document.getElementById('prevFib');
   const confirmLogSearchBtn = document.getElementById('confirmLogSearchBtn');
 
+  // OpenRouter AI UI Elements
+  const openAiSettingsBtn = document.getElementById('openAiSettingsBtn');
+  const aiStatusPill = document.getElementById('aiStatusPill');
+  const triggerAiFetchBtn = document.getElementById('triggerAiFetchBtn');
+  const aiBtnIcon = document.getElementById('aiBtnIcon');
+  const aiBtnText = document.getElementById('aiBtnText');
+  const aiBadgeTag = document.getElementById('aiBadgeTag');
+  const aiLoadingIndicator = document.getElementById('aiLoadingIndicator');
+  const aiConfigModalBackdrop = document.getElementById('aiConfigModalBackdrop');
+  const closeAiConfigModalBtn = document.getElementById('closeAiConfigModalBtn');
+  const openRouterApiKeyInput = document.getElementById('openRouterApiKeyInput');
+  const openRouterModelSelect = document.getElementById('openRouterModelSelect');
+  const saveAiConfigBtn = document.getElementById('saveAiConfigBtn');
+  const aiConfigAlert = document.getElementById('aiConfigAlert');
+
   // Baseline nutritional database per 100g (or per piece)
   const foodDb = {
     "chicken breast": { base: "g", cal100: 165, p100: 31, c100: 0, f100: 3.6, fib100: 0 },
+    "chicken": { base: "g", cal100: 165, p100: 31, c100: 0, f100: 3.6, fib100: 0 },
     "rolled oats": { base: "g", cal100: 380, p100: 14, c100: 68, f100: 6, fib100: 10 },
     "oats": { base: "g", cal100: 380, p100: 14, c100: 68, f100: 6, fib100: 10 },
     "banana": { base: "pcs", calPiece: 105, pPiece: 1.3, cPiece: 27, fPiece: 0.3, fibPiece: 3.1 },
@@ -827,6 +843,93 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   let currentSearchCalc = { name: "Food Item", qtyText: "100g", cal: 0, p: 0, c: 0, f: 0, fib: 0 };
+  let aiLookupDebounceTimer = null;
+  let activeAiRequestController = null;
+
+  // OpenRouter Free LLM AI Nutrition Fetcher
+  async function fetchAiNutrition(foodQuery, qty, unit) {
+    if (!foodQuery || !foodQuery.trim() || qty <= 0) return;
+
+    if (activeAiRequestController) {
+      activeAiRequestController.abort();
+    }
+    activeAiRequestController = new AbortController();
+
+    if (aiLoadingIndicator) aiLoadingIndicator.style.display = 'block';
+    if (aiBtnText) aiBtnText.textContent = 'Analyzing...';
+    if (aiBtnIcon) aiBtnIcon.textContent = '⏳';
+
+    try {
+      const res = await fetch('/api/ai/nutrition-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          foodQuery: foodQuery.trim(),
+          quantity: qty,
+          unit: unit
+        }),
+        signal: activeAiRequestController.signal
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+
+      if (json.success && json.data) {
+        const item = json.data;
+        if (previewFoodTitle) previewFoodTitle.textContent = item.name;
+        if (previewFoodQty) previewFoodQty.textContent = item.portion || `${qty} ${unit} portion`;
+        if (previewFoodCal) previewFoodCal.textContent = `${item.calories} kcal`;
+        if (prevP) prevP.textContent = `${item.protein}g`;
+        if (prevC) prevC.textContent = `${item.carbs}g`;
+        if (prevF) prevF.textContent = `${item.fats}g`;
+        if (prevFib) prevFib.textContent = `${item.fiber}g`;
+
+        currentSearchCalc = {
+          name: item.name,
+          qtyText: item.portion || `${qty} ${unit} portion`,
+          cal: item.calories,
+          p: item.protein,
+          c: item.carbs,
+          f: item.fats,
+          fib: item.fiber
+        };
+
+        if (aiBadgeTag) {
+          aiBadgeTag.style.display = 'inline-block';
+          if (json.source === 'openrouter') {
+            const shortModel = json.model ? (json.model.split('/')[1] || json.model).replace(':free', '') : 'Llama';
+            aiBadgeTag.style.background = 'rgba(37,99,235,0.12)';
+            aiBadgeTag.style.color = '#2563EB';
+            aiBadgeTag.textContent = `✨ OpenRouter AI (${shortModel})`;
+          } else {
+            aiBadgeTag.style.background = 'rgba(16,185,129,0.12)';
+            aiBadgeTag.style.color = '#059669';
+            aiBadgeTag.textContent = `⚡ Smart Database`;
+          }
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.warn('[FitTrack AI] Nutrition fetch error:', err);
+      }
+    } finally {
+      if (aiLoadingIndicator) aiLoadingIndicator.style.display = 'none';
+      if (aiBtnText) aiBtnText.textContent = 'AI Fetch';
+      if (aiBtnIcon) aiBtnIcon.textContent = '✨';
+    }
+  }
+
+  function queueAiNutritionFetch() {
+    if (aiLookupDebounceTimer) clearTimeout(aiLookupDebounceTimer);
+    aiLookupDebounceTimer = setTimeout(() => {
+      const name = (searchItemInput.value || '').trim();
+      const qty = parseFloat(searchQtyInput.value) || 0;
+      const unit = searchUnitSelect.value;
+      if (name.length >= 2 && qty > 0) {
+        fetchAiNutrition(name, qty, unit);
+      }
+    }, 650);
+  }
 
   function calculateSearchNutrients() {
     const rawName = (searchItemInput.value || '').trim().toLowerCase();
@@ -843,6 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
       prevC.textContent = "0g";
       prevF.textContent = "0g";
       prevFib.textContent = "0g";
+      if (aiBadgeTag) aiBadgeTag.style.display = 'none';
       currentSearchCalc = { name: searchItemInput.value.trim() || "Food Item", qtyText: `${qty} ${unit}`, cal: 0, p: 0, c: 0, f: 0, fib: 0 };
       return;
     }
@@ -851,7 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let matchedFood = null;
 
     for (const key in foodDb) {
-      if (rawName.includes(key)) {
+      if (rawName.includes(key) || key.includes(rawName)) {
         matchedFood = foodDb[key];
         break;
       }
@@ -874,12 +978,12 @@ document.addEventListener('DOMContentLoaded', () => {
         fib = Math.round(matchedFood.fib100 * factor * 10) / 10;
       }
     } else {
-      // General estimation for non-database custom search
+      // General baseline estimation
       const factor = (unit === "g") ? (qty / 100) : qty;
-      cal = Math.round(200 * factor);
-      p = Math.round(15 * factor);
+      cal = Math.round(180 * factor);
+      p = Math.round(12 * factor);
       c = Math.round(20 * factor);
-      f = Math.round(6 * factor);
+      f = Math.round(5 * factor);
       fib = Math.round(2 * factor);
     }
 
@@ -895,6 +999,124 @@ document.addEventListener('DOMContentLoaded', () => {
     prevFib.textContent = `${fib}g`;
 
     currentSearchCalc = { name: titleText, qtyText: portionText, cal, p, c, f, fib };
+
+    // Trigger AI Fetch debounced in background for live precision
+    queueAiNutritionFetch();
+  }
+
+  // OpenRouter AI Event Listeners
+  if (triggerAiFetchBtn) {
+    triggerAiFetchBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (aiLookupDebounceTimer) clearTimeout(aiLookupDebounceTimer);
+      const name = (searchItemInput.value || '').trim();
+      const qty = parseFloat(searchQtyInput.value) || 100;
+      const unit = searchUnitSelect.value;
+      if (!name) {
+        searchItemInput.focus();
+        return;
+      }
+      fetchAiNutrition(name, qty, unit);
+    });
+  }
+
+  async function refreshAiStatus() {
+    try {
+      const res = await fetch('/api/ai/config');
+      if (res.ok) {
+        const data = await res.json();
+        if (aiStatusPill) {
+          if (data.configured) {
+            aiStatusPill.textContent = '✨ AI Active';
+            aiStatusPill.style.background = 'rgba(16,185,129,0.15)';
+            aiStatusPill.style.color = '#059669';
+          } else {
+            aiStatusPill.textContent = '⚡ Connect Free AI';
+            aiStatusPill.style.background = 'rgba(37,99,235,0.12)';
+            aiStatusPill.style.color = '#2563EB';
+          }
+        }
+        if (openRouterApiKeyInput && data.maskedKey && !openRouterApiKeyInput.value) {
+          openRouterApiKeyInput.placeholder = data.maskedKey;
+        }
+        if (openRouterModelSelect && data.model) {
+          openRouterModelSelect.value = data.model;
+        }
+      }
+    } catch(e) {}
+  }
+  refreshAiStatus();
+
+  if (openAiSettingsBtn && aiConfigModalBackdrop) {
+    openAiSettingsBtn.addEventListener('click', () => {
+      aiConfigModalBackdrop.style.display = 'flex';
+      refreshAiStatus();
+    });
+  }
+
+  if (closeAiConfigModalBtn && aiConfigModalBackdrop) {
+    closeAiConfigModalBtn.addEventListener('click', () => {
+      aiConfigModalBackdrop.style.display = 'none';
+    });
+  }
+
+  if (aiConfigModalBackdrop) {
+    aiConfigModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === aiConfigModalBackdrop) {
+        aiConfigModalBackdrop.style.display = 'none';
+      }
+    });
+  }
+
+  if (saveAiConfigBtn) {
+    saveAiConfigBtn.addEventListener('click', async () => {
+      const apiKey = (openRouterApiKeyInput.value || '').trim();
+      const model = openRouterModelSelect.value;
+
+      saveAiConfigBtn.disabled = true;
+      saveAiConfigBtn.textContent = 'Saving...';
+      try {
+        const res = await fetch('/api/ai/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey, model })
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (aiConfigAlert) {
+            aiConfigAlert.style.display = 'block';
+            aiConfigAlert.style.color = '#059669';
+            aiConfigAlert.style.background = 'rgba(16,185,129,0.12)';
+            aiConfigAlert.style.border = '1px solid rgba(16,185,129,0.3)';
+            aiConfigAlert.textContent = '✨ OpenRouter AI connected successfully!';
+          }
+          refreshAiStatus();
+          setTimeout(() => {
+            if (aiConfigModalBackdrop) aiConfigModalBackdrop.style.display = 'none';
+            if (aiConfigAlert) aiConfigAlert.style.display = 'none';
+          }, 1000);
+        } else {
+          if (aiConfigAlert) {
+            aiConfigAlert.style.display = 'block';
+            aiConfigAlert.style.color = '#DC2626';
+            aiConfigAlert.style.background = 'rgba(220,38,38,0.12)';
+            aiConfigAlert.style.border = '1px solid rgba(220,38,38,0.3)';
+            aiConfigAlert.textContent = data.message || 'Error saving AI key';
+          }
+        }
+      } catch (err) {
+        if (aiConfigAlert) {
+          aiConfigAlert.style.display = 'block';
+          aiConfigAlert.style.color = '#DC2626';
+          aiConfigAlert.style.background = 'rgba(220,38,38,0.12)';
+          aiConfigAlert.style.border = '1px solid rgba(220,38,38,0.3)';
+          aiConfigAlert.textContent = 'Connection error: ' + err.message;
+        }
+      } finally {
+        saveAiConfigBtn.disabled = false;
+        saveAiConfigBtn.textContent = 'Save & Activate Free AI';
+      }
+    });
   }
 
   searchItemInput.addEventListener('input', calculateSearchNutrients);

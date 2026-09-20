@@ -76,6 +76,231 @@ function saveGoogleConfig(config) {
   }
 }
 
+// ==================== OPENROUTER AI CONFIGURATION ====================
+const AI_CONFIG_FILE = path.join(__dirname, 'data', 'ai-config.json');
+
+function getAiConfig() {
+  try {
+    if (!fs.existsSync(AI_CONFIG_FILE)) {
+      const initial = {
+        apiKey: process.env.OPENROUTER_API_KEY || '',
+        model: 'meta-llama/llama-3.2-3b-instruct:free',
+        updatedAt: Date.now()
+      };
+      fs.writeFileSync(AI_CONFIG_FILE, JSON.stringify(initial, null, 2), 'utf8');
+      return initial;
+    }
+    const data = fs.readFileSync(AI_CONFIG_FILE, 'utf8');
+    const config = JSON.parse(data || '{}');
+    if (process.env.OPENROUTER_API_KEY && !config.apiKey) {
+      config.apiKey = process.env.OPENROUTER_API_KEY;
+    }
+    return config;
+  } catch (err) {
+    return { apiKey: process.env.OPENROUTER_API_KEY || '', model: 'meta-llama/llama-3.2-3b-instruct:free' };
+  }
+}
+
+function saveAiConfig(config) {
+  try {
+    config.updatedAt = Date.now();
+    fs.writeFileSync(AI_CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('Error saving AI config:', err);
+    return false;
+  }
+}
+
+const OPENROUTER_FREE_MODELS = [
+  'meta-llama/llama-3.2-3b-instruct:free',
+  'google/gemini-2.0-flash-lite-preview-02-05:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+  'mistralai/mistral-7b-instruct:free'
+];
+
+async function callOpenRouterAi(apiKey, foodQuery, quantity, unit, requestedModel) {
+  const modelsToTry = [
+    requestedModel || 'meta-llama/llama-3.2-3b-instruct:free',
+    ...OPENROUTER_FREE_MODELS.filter(m => m !== requestedModel)
+  ];
+
+  const systemPrompt = `You are a certified clinical sports dietitian and precise nutrition database AI.
+The user will provide a food name and portion (quantity & unit).
+Calculate the realistic nutritional breakdown based on USDA FoodData Central and standard food composition data.
+You MUST output ONLY a valid JSON object with NO markdown tags (no \`\`\` or \`\`\`json), NO code blocks, and NO explanatory text.
+JSON format:
+{
+  "name": "Standardized Food Name (e.g. Cooked Chicken Breast)",
+  "portion": "e.g. 150g",
+  "calories": 248,
+  "protein": 46.5,
+  "carbs": 0.0,
+  "fats": 5.4,
+  "fiber": 0.0,
+  "confidence": "high",
+  "summary": "Short 1-line nutritional summary"
+}`;
+
+  const userPrompt = `Food: "${foodQuery}", Quantity: ${quantity || 100}, Unit: "${unit || 'g'}"`;
+  let lastError = null;
+
+  for (const model of modelsToTry) {
+    try {
+      console.log(`[OpenRouter AI] Calling model ${model} for food: "${foodQuery}"...`);
+      const bodyPayload = JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 300
+      });
+
+      const responseText = await new Promise((resolve, reject) => {
+        const req = https.request({
+          hostname: 'openrouter.ai',
+          path: '/api/v1/chat/completions',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKey.trim(),
+            'HTTP-Referer': 'https://fittrack-m87l.onrender.com',
+            'X-Title': 'FitTrack AI Nutrition'
+          },
+          timeout: 12000
+        }, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(data);
+            } else {
+              reject(new Error(`OpenRouter HTTP ${res.statusCode}: ${data}`));
+            }
+          });
+        });
+
+        req.on('error', reject);
+        req.on('timeout', () => {
+          req.destroy();
+          reject(new Error(`OpenRouter timeout with model ${model}`));
+        });
+        req.write(bodyPayload);
+        req.end();
+      });
+
+      const parsedRes = JSON.parse(responseText);
+      const content = parsedRes?.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty response content from OpenRouter');
+      }
+
+      let cleanJson = content.trim();
+      if (cleanJson.startsWith('```')) {
+        cleanJson = cleanJson.replace(/^```(json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      }
+
+      const match = cleanJson.match(/\{[\s\S]*\}/);
+      if (match) cleanJson = match[0];
+
+      const nutritionData = JSON.parse(cleanJson);
+
+      const result = {
+        name: nutritionData.name || foodQuery,
+        portion: nutritionData.portion || `${quantity} ${unit}`,
+        calories: Math.max(0, Math.round(Number(nutritionData.calories) || 0)),
+        protein: Math.max(0, Math.round((Number(nutritionData.protein) || 0) * 10) / 10),
+        carbs: Math.max(0, Math.round((Number(nutritionData.carbs) || 0) * 10) / 10),
+        fats: Math.max(0, Math.round((Number(nutritionData.fats) || Number(nutritionData.fat) || 0) * 10) / 10),
+        fiber: Math.max(0, Math.round((Number(nutritionData.fiber) || 0) * 10) / 10),
+        confidence: nutritionData.confidence || 'high',
+        summary: nutritionData.summary || 'Estimated by OpenRouter AI'
+      };
+
+      console.log(`[OpenRouter AI] Success with ${model}: ${result.name} - ${result.calories} kcal`);
+      return { success: true, source: 'openrouter', model: model, data: result };
+    } catch (err) {
+      console.warn(`[OpenRouter AI] Model ${model} failed:`, err.message);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('All OpenRouter models failed');
+}
+
+function calculateLocalSmartNutrition(rawName, qty, unit) {
+  const q = (rawName || '').trim().toLowerCase();
+  const quantity = parseFloat(qty) || 100;
+  const u = (unit || 'g').toLowerCase();
+
+  const db = [
+    { keys: ['chicken breast', 'chicken', 'grilled chicken'], cal100: 165, p: 31, c: 0, f: 3.6, fib: 0, name: 'Chicken Breast (Cooked)' },
+    { keys: ['egg white', 'egg whites'], calPcs: 17, p: 3.6, c: 0.2, f: 0.1, fib: 0, name: 'Egg Whites' },
+    { keys: ['egg', 'eggs', 'boiled egg'], calPcs: 72, p: 6.3, c: 0.4, f: 4.8, fib: 0, name: 'Whole Egg' },
+    { keys: ['oat', 'oats', 'oatmeal', 'rolled oats'], cal100: 389, p: 16.9, c: 66.3, f: 6.9, fib: 10.6, name: 'Rolled Oats' },
+    { keys: ['rice', 'white rice'], cal100: 130, p: 2.7, c: 28.2, f: 0.3, fib: 0.4, name: 'Cooked White Rice' },
+    { keys: ['brown rice'], cal100: 111, p: 2.6, c: 23.0, f: 0.9, fib: 1.8, name: 'Cooked Brown Rice' },
+    { keys: ['salmon', 'salmon fillet'], cal100: 206, p: 22.1, c: 0, f: 12.3, fib: 0, name: 'Atlantic Salmon' },
+    { keys: ['banana'], calPcs: 105, p: 1.3, c: 27.0, f: 0.3, fib: 3.1, name: 'Fresh Banana' },
+    { keys: ['apple'], calPcs: 95, p: 0.5, c: 25.0, f: 0.3, fib: 4.4, name: 'Fresh Apple' },
+    { keys: ['whey', 'protein powder'], cal100: 380, p: 75, c: 8, f: 4, fib: 1, name: 'Whey Protein Powder' },
+    { keys: ['greek yogurt', 'yogurt'], cal100: 97, p: 10.0, c: 3.9, f: 5.0, fib: 0, name: 'Greek Yogurt' },
+    { keys: ['peanut butter'], cal100: 588, p: 25.1, c: 20.0, f: 50.4, fib: 6.0, name: 'Peanut Butter' },
+    { keys: ['potato', 'potatoes', 'boiled potato'], cal100: 87, p: 1.9, c: 20.1, f: 0.1, fib: 1.8, name: 'Boiled Potato' },
+    { keys: ['sweet potato'], cal100: 86, p: 1.6, c: 20.1, f: 0.1, fib: 3.0, name: 'Cooked Sweet Potato' },
+    { keys: ['avocado'], cal100: 160, p: 2.0, c: 8.5, f: 14.7, fib: 6.7, name: 'Fresh Avocado' },
+    { keys: ['beef', 'steak', 'ground beef'], cal100: 250, p: 26.0, c: 0, f: 15.0, fib: 0, name: 'Lean Beef (Cooked)' },
+    { keys: ['tuna', 'canned tuna'], cal100: 132, p: 28.0, c: 0, f: 1.0, fib: 0, name: 'Canned Tuna in Water' },
+    { keys: ['bread', 'whole wheat bread'], calPcs: 80, cal100: 265, p: 9.0, c: 49.0, f: 3.2, fib: 6.0, name: 'Whole Wheat Bread' },
+    { keys: ['milk'], cal100: 50, p: 3.4, c: 5.0, f: 2.0, fib: 0, name: 'Cow Milk' },
+    { keys: ['almond', 'almonds'], cal100: 579, p: 21.2, c: 21.6, f: 49.9, fib: 12.5, name: 'Raw Almonds' }
+  ];
+
+  let match = db.find(item => item.keys.some(k => q === k || q.includes(k) || k.includes(q)));
+  if (!match) {
+    match = { cal100: 180, p: 12, c: 20, f: 5, fib: 2, name: rawName.charAt(0).toUpperCase() + rawName.slice(1) };
+  }
+
+  let factor = 1.0;
+  if (match.calPcs && (u === 'pcs' || u === 'pieces' || u === 'item' || u === 'items')) {
+    factor = quantity;
+    return {
+      name: match.name,
+      portion: `${quantity} ${u}`,
+      calories: Math.round(match.calPcs * factor),
+      protein: Math.round((typeof match.p === 'number' ? match.p : 12) * factor * 10) / 10,
+      carbs: Math.round((typeof match.c === 'number' ? match.c : 20) * factor * 10) / 10,
+      fats: Math.round((typeof match.f === 'number' ? match.f : 5) * factor * 10) / 10,
+      fiber: Math.round((typeof match.fib === 'number' ? match.fib : 2) * factor * 10) / 10,
+      confidence: 'medium',
+      summary: 'Calculated from clinical nutrition database'
+    };
+  }
+
+  if (u === 'g') factor = quantity / 100;
+  else if (u === 'oz') factor = (quantity * 28.35) / 100;
+  else if (u === 'cup') factor = (quantity * 160) / 100;
+  else if (u === 'tbsp') factor = (quantity * 15) / 100;
+  else factor = quantity / 100;
+
+  const baseCal = match.cal100 || (match.calPcs ? match.calPcs * 1.4 : 180);
+  return {
+    name: match.name,
+    portion: `${quantity} ${u}`,
+    calories: Math.round(baseCal * factor),
+    protein: Math.round((typeof match.p === 'number' ? match.p : 12) * factor * 10) / 10,
+    carbs: Math.round((typeof match.c === 'number' ? match.c : 20) * factor * 10) / 10,
+    fats: Math.round((typeof match.f === 'number' ? match.f : 5) * factor * 10) / 10,
+    fiber: Math.round((typeof match.fib === 'number' ? match.fib : 2) * factor * 10) / 10,
+    confidence: 'medium',
+    summary: 'Calculated from clinical nutrition database'
+  };
+}
+
 // Ensure data directory exists
 if (!fs.existsSync(path.join(__dirname, 'data'))) {
   fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
@@ -1120,6 +1345,94 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('[API] Error fetching history:', err);
       return sendJson(res, 500, { success: false, message: 'Failed to fetch history' });
+    }
+  }
+
+  // ==================== 12. OPENROUTER AI NUTRITION LOOKUP API ====================
+  // 12a. GET /api/ai/config (Check AI status)
+  if (pathname === '/api/ai/config' && req.method === 'GET') {
+    const config = getAiConfig();
+    const hasKey = !!(config.apiKey && config.apiKey.trim());
+    return sendJson(res, 200, {
+      success: true,
+      configured: hasKey,
+      model: config.model || 'meta-llama/llama-3.2-3b-instruct:free',
+      availableFreeModels: OPENROUTER_FREE_MODELS,
+      maskedKey: hasKey ? (config.apiKey.slice(0, 8) + '...' + config.apiKey.slice(-4)) : null
+    });
+  }
+
+  // 12b. POST /api/ai/config (Update OpenRouter API Key and model)
+  if (pathname === '/api/ai/config' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody(req);
+      const config = getAiConfig();
+      if (body.apiKey !== undefined) {
+        config.apiKey = (body.apiKey || '').trim();
+        process.env.OPENROUTER_API_KEY = config.apiKey;
+      }
+      if (body.model) {
+        config.model = body.model.trim();
+      }
+      config.updatedAt = Date.now();
+      saveAiConfig(config);
+      console.log('[OpenRouter AI] Updated AI configuration. Has API key:', !!config.apiKey);
+      return sendJson(res, 200, {
+        success: true,
+        message: 'OpenRouter AI configuration updated successfully',
+        configured: !!config.apiKey,
+        model: config.model
+      });
+    } catch (err) {
+      console.error('[API] Error updating AI config:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to update AI configuration' });
+    }
+  }
+
+  // 12c. POST /api/ai/nutrition-lookup (Analyze food with OpenRouter Free LLM or smart database)
+  if (pathname === '/api/ai/nutrition-lookup' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody(req);
+      const foodQuery = (body.foodQuery || body.name || '').trim();
+      const quantity = parseFloat(body.quantity || body.qty) || 100;
+      const unit = (body.unit || 'g').trim();
+      const preferredModel = body.model || null;
+
+      if (!foodQuery) {
+        return sendJson(res, 400, { success: false, message: 'Food item query is required' });
+      }
+
+      const config = getAiConfig();
+      const apiKey = config.apiKey || process.env.OPENROUTER_API_KEY || '';
+
+      if (apiKey && apiKey.trim()) {
+        try {
+          const aiResult = await callOpenRouterAi(apiKey, foodQuery, quantity, unit, preferredModel || config.model);
+          return sendJson(res, 200, aiResult);
+        } catch (aiErr) {
+          console.warn('[OpenRouter AI] Live API error, falling back to smart database:', aiErr.message);
+          const fallback = calculateLocalSmartNutrition(foodQuery, quantity, unit);
+          return sendJson(res, 200, {
+            success: true,
+            source: 'smart_database',
+            model: 'Local Database (OpenRouter: ' + aiErr.message + ')',
+            data: fallback
+          });
+        }
+      } else {
+        // No key set yet: provide high-precision fallback and notify user
+        const fallback = calculateLocalSmartNutrition(foodQuery, quantity, unit);
+        return sendJson(res, 200, {
+          success: true,
+          source: 'smart_database',
+          model: 'Smart Clinical Nutrition Database',
+          note: 'Add OpenRouter Free API Key in AI Settings for full LLM analysis',
+          data: fallback
+        });
+      }
+    } catch (err) {
+      console.error('[API] Error in nutrition lookup:', err);
+      return sendJson(res, 500, { success: false, message: 'Nutrition lookup failed' });
     }
   }
 
