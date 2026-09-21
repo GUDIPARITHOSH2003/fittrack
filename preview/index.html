@@ -1267,42 +1267,75 @@
 
           <!-- ================= MODE 1: AI CAMERA ================= -->
           <div class="modal-mode-panel active" id="panelCamera">
-            <div class="viewfinder-box" id="viewfinderArea">
-              <div class="viewfinder-grid">
+            <div class="viewfinder-box" id="viewfinderArea" style="position: relative; overflow: hidden;">
+              <!-- Live Video Stream from device camera -->
+              <video id="cameraVideo" playsinline autoplay muted style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 18px; display: none; z-index: 1;"></video>
+              
+              <!-- Captured Freeze-Frame Snapshot Preview -->
+              <img id="cameraSnapshotPreview" alt="Food Snapshot" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 18px; display: none; z-index: 2;" />
+              
+              <!-- Hidden Offscreen Canvas for Snapshot Capture -->
+              <canvas id="cameraCanvas" style="display: none;"></canvas>
+              
+              <!-- Hidden File Input for Native Camera Roll / Image Picker -->
+              <input type="file" id="cameraFileInput" accept="image/*" capture="environment" style="display: none;" />
+
+              <!-- Overlay Scanner Grid / Frame -->
+              <div class="viewfinder-grid" id="viewfinderGridOverlay" style="position: relative; z-index: 3;">
                 <div class="corner tl"></div>
                 <div class="corner tr"></div>
                 <div class="corner bl"></div>
                 <div class="corner br"></div>
-                <div class="laser-scanner-line"></div>
-                <div class="viewfinder-icon-hint">
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.5">
+                <div class="laser-scanner-line" id="cameraLaserLine"></div>
+                <div class="viewfinder-icon-hint" id="cameraIconHint">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="1.5">
                     <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
                     <circle cx="12" cy="12" r="3.5"/>
                   </svg>
-                  <span>AI Camera Food &amp; Dish Scanner</span>
+                  <span>Aim camera at your meal or snack</span>
                 </div>
               </div>
 
-              <!-- Viewfinder Camera Simulator Controls -->
-              <div class="viewfinder-toolbar">
-                <button class="viewfinder-action" id="torchToggle">Flash: Off</button>
-                <button class="simulate-detection-btn" id="simulateScanBtn">Simulate Capture (Salad Bowl)</button>
+              <!-- AI Vision Loading Spinner Overlay -->
+              <div id="cameraAiLoading" style="display: none; position: absolute; inset: 0; background: rgba(15,23,42,0.75); backdrop-filter: blur(4px); z-index: 10; border-radius: 18px; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; gap: 8px;">
+                <div style="font-size: 32px; animation: pulseGlow 1.2s infinite;">✨</div>
+                <div style="font-weight: 700; font-size: 14px;">AI Analyzing Food Photo...</div>
+                <div style="font-size: 11px; opacity: 0.85;">Estimating dish, portion &amp; macro nutrients</div>
+              </div>
+
+              <!-- Viewfinder Real Camera & Action Toolbar -->
+              <div class="viewfinder-toolbar" style="display: flex; gap: 8px; justify-content: center; align-items: center; padding: 10px 12px; position: relative; z-index: 5;">
+                <button type="button" class="viewfinder-action" id="snapPhotoBtn" style="background: #2563EB; color: #fff; font-weight: 700; border: none; border-radius: 12px; padding: 8px 14px; display: flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: 0 4px 10px rgba(37,99,235,0.35); transition: transform 0.15s ease;">
+                  <span id="snapBtnIcon">📸</span>
+                  <span id="snapBtnText">Snap Photo</span>
+                </button>
+                <button type="button" class="viewfinder-action" id="uploadPhotoBtn" style="background: rgba(255,255,255,0.92); color: #1F2937; font-weight: 700; border: 1px solid #E5E7EB; border-radius: 12px; padding: 8px 12px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <span>📁</span>
+                  <span>Upload</span>
+                </button>
+                <button type="button" class="viewfinder-action" id="retakePhotoBtn" style="display: none; background: rgba(255,255,255,0.92); color: #DC2626; font-weight: 700; border: 1px solid #FECACA; border-radius: 12px; padding: 8px 12px; align-items: center; gap: 6px; cursor: pointer;">
+                  <span>🔄</span>
+                  <span>Retake</span>
+                </button>
               </div>
             </div>
 
             <!-- Detected Result Preview Card -->
-            <div class="detected-food-card" id="detectedFoodCard" style="display: none;">
+            <div class="detected-food-card" id="detectedFoodCard" style="display: none; animation: fadeIn 0.3s ease;">
               <div class="detected-top">
                 <div>
-                  <h4 class="detected-title" id="detectedTitle">Mediterranean Salad Bowl</h4>
-                  <p class="detected-sub" id="detectedBrand">AI Vision Recognized • 280g serving</p>
+                  <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <h4 class="detected-title" id="detectedTitle">Mediterranean Salad Bowl</h4>
+                    <span style="font-size: 9.5px; font-weight: 800; padding: 2px 7px; border-radius: 10px; background: rgba(37,99,235,0.12); color: #2563EB;">✨ AI Vision</span>
+                  </div>
+                  <p class="detected-sub" id="detectedBrand">AI Recognized • 280g serving</p>
                 </div>
                 <span class="detected-cal" id="detectedCalories">340 kcal</span>
               </div>
               <div class="detected-macros-row" id="detectedMacros">
                 <span>Protein: 18g</span> • <span>Carbs: 26g</span> • <span>Fat: 14g</span> • <span>Fiber: 6g</span>
               </div>
-              <button class="dark-pill-cta" id="confirmLogScannedBtn">Add to Meal Log</button>
+              <button class="dark-pill-cta" id="confirmLogScannedBtn" style="margin-top: 10px; width: 100%;">Add to Meal Log</button>
             </div>
           </div>
 

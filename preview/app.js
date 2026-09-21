@@ -65,11 +65,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const activeTimerVal = document.getElementById('activeTimerVal');
   const checklistCountEl = document.getElementById('checklistCount');
 
-  // Scanner Simulator
-  const simulateScanBtn = document.getElementById('simulateScanBtn');
+  // Scanner Camera & AI Vision Elements
+  const cameraVideo = document.getElementById('cameraVideo');
+  const cameraSnapshotPreview = document.getElementById('cameraSnapshotPreview');
+  const cameraCanvas = document.getElementById('cameraCanvas');
+  const cameraFileInput = document.getElementById('cameraFileInput');
+  const cameraAiLoading = document.getElementById('cameraAiLoading');
+  const cameraLaserLine = document.getElementById('cameraLaserLine');
+  const cameraIconHint = document.getElementById('cameraIconHint');
+  const snapPhotoBtn = document.getElementById('snapPhotoBtn');
+  const uploadPhotoBtn = document.getElementById('uploadPhotoBtn');
+  const retakePhotoBtn = document.getElementById('retakePhotoBtn');
   const detectedFoodCard = document.getElementById('detectedFoodCard');
+  const detectedTitle = document.getElementById('detectedTitle');
+  const detectedBrand = document.getElementById('detectedBrand');
+  const detectedCalories = document.getElementById('detectedCalories');
+  const detectedMacros = document.getElementById('detectedMacros');
   const confirmLogScannedBtn = document.getElementById('confirmLogScannedBtn');
-  const torchToggle = document.getElementById('torchToggle');
 
   // Profile Slider
   const targetSlider = document.getElementById('targetSlider');
@@ -790,12 +802,104 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Scan Modal Controls
+  let cameraStream = null;
+
+  async function startCameraStream() {
+    if (cameraSnapshotPreview && cameraSnapshotPreview.style.display === 'block') {
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (cameraIconHint) {
+        cameraIconHint.innerHTML = `
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+          <span>Tap "Upload" or "Snap Photo" to take/select photo</span>
+        `;
+        cameraIconHint.style.display = 'flex';
+      }
+      return;
+    }
+
+    try {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+      }
+      const constraints = {
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
+      cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (cameraVideo) {
+        cameraVideo.srcObject = cameraStream;
+        cameraVideo.style.display = 'block';
+        try {
+          await cameraVideo.play();
+        } catch (playErr) {
+          console.warn('[FitTrack Camera] Auto-play warning:', playErr);
+        }
+      }
+      if (cameraSnapshotPreview) cameraSnapshotPreview.style.display = 'none';
+      if (cameraIconHint) cameraIconHint.style.display = 'none';
+      if (cameraLaserLine) cameraLaserLine.style.display = 'block';
+    } catch (err) {
+      console.warn('[FitTrack Camera] Stream access error:', err);
+      if (cameraVideo) cameraVideo.style.display = 'none';
+      if (cameraIconHint) {
+        cameraIconHint.innerHTML = `
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+          <span>Tap "Upload" or "Snap Photo" to select a meal photo</span>
+        `;
+        cameraIconHint.style.display = 'flex';
+      }
+      if (cameraLaserLine) cameraLaserLine.style.display = 'none';
+    }
+  }
+
+  function stopCameraStream() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => {
+        try { track.stop(); } catch(e) {}
+      });
+      cameraStream = null;
+    }
+    if (cameraVideo) {
+      cameraVideo.srcObject = null;
+      cameraVideo.style.display = 'none';
+    }
+    if (cameraLaserLine) cameraLaserLine.style.display = 'none';
+  }
+
   function openScanner() {
     clearScannerInputs();
     scanModalBackdrop.classList.add('show');
+    const activeTab = document.querySelector('.mode-tab.active');
+    if (!activeTab || activeTab.dataset.mode === 'camera') {
+      startCameraStream();
+    }
   }
 
   function closeScanner() {
+    stopCameraStream();
+    if (cameraSnapshotPreview) {
+      cameraSnapshotPreview.src = '';
+      cameraSnapshotPreview.style.display = 'none';
+    }
+    if (retakePhotoBtn) retakePhotoBtn.style.display = 'none';
+    if (detectedFoodCard) detectedFoodCard.style.display = 'none';
+    if (cameraFileInput) cameraFileInput.value = '';
+    state.scannedItem = null;
     scanModalBackdrop.classList.remove('show');
   }
 
@@ -844,67 +948,211 @@ document.addEventListener('DOMContentLoaded', () => {
         panelSearch.style.display = 'none';
         panelManual.style.display = 'none';
         if (panelFavourites) panelFavourites.style.display = 'none';
-      } else if (mode === 'search') {
-        panelCamera.style.display = 'none';
-        panelSearch.style.display = 'block';
-        panelManual.style.display = 'none';
-        if (panelFavourites) panelFavourites.style.display = 'none';
-        calculateSearchNutrients();
-      } else if (mode === 'manual') {
-        panelCamera.style.display = 'none';
-        panelSearch.style.display = 'none';
-        panelManual.style.display = 'block';
-        if (panelFavourites) panelFavourites.style.display = 'none';
-      } else if (mode === 'favourites') {
-        panelCamera.style.display = 'none';
-        panelSearch.style.display = 'none';
-        panelManual.style.display = 'none';
-        if (panelFavourites) {
-          panelFavourites.style.display = 'block';
-          fetchFavourites();
+        startCameraStream();
+      } else {
+        stopCameraStream();
+        if (mode === 'search') {
+          panelCamera.style.display = 'none';
+          panelSearch.style.display = 'block';
+          panelManual.style.display = 'none';
+          if (panelFavourites) panelFavourites.style.display = 'none';
+          calculateSearchNutrients();
+        } else if (mode === 'manual') {
+          panelCamera.style.display = 'none';
+          panelSearch.style.display = 'none';
+          panelManual.style.display = 'block';
+          if (panelFavourites) panelFavourites.style.display = 'none';
+        } else if (mode === 'favourites') {
+          panelCamera.style.display = 'none';
+          panelSearch.style.display = 'none';
+          panelManual.style.display = 'none';
+          if (panelFavourites) {
+            panelFavourites.style.display = 'block';
+            fetchFavourites();
+          }
         }
       }
     });
   });
 
-  // ================= MODE 1: AI CAMERA =================
-  simulateScanBtn.addEventListener('click', () => {
-    detectedFoodCard.style.display = 'block';
-    state.scannedItem = {
-      name: "Mediterranean Salad Bowl",
-      portion: "AI Camera (280g)",
-      cal: 340,
-      p: 18,
-      c: 26,
-      f: 14,
-      fib: 6
-    };
-  });
+  // ================= MODE 1: AI CAMERA & VISION =================
+  async function analyzeFoodImage(dataUrl) {
+    if (!dataUrl) return;
 
-  confirmLogScannedBtn.addEventListener('click', () => {
-    if (state.scannedItem) {
-      logFoodItem(
-        state.scannedItem.name,
-        state.scannedItem.portion,
-        state.scannedItem.cal,
-        state.scannedItem.p,
-        state.scannedItem.c,
-        state.scannedItem.f,
-        state.scannedItem.fib
-      );
-      state.scannedItem = null;
-      detectedFoodCard.style.display = 'none';
-      closeScanner();
+    if (cameraAiLoading) cameraAiLoading.style.display = 'flex';
+    if (cameraLaserLine) cameraLaserLine.style.display = 'none';
+    if (detectedFoodCard) detectedFoodCard.style.display = 'none';
+
+    try {
+      const parts = dataUrl.split(',');
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const imageBase64 = parts[1];
+
+      const res = await fetch('/api/ai/camera-nutrition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, mimeType })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Server returned HTTP ${res.status}`);
+      }
+
+      const result = await res.json();
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Could not analyze food image');
+      }
+
+      const food = result.data;
+      if (food.isFood === false) {
+        showToast('⚠️ No food recognized in image. Please take a clearer photo.');
+        return;
+      }
+
+      if (detectedTitle) detectedTitle.textContent = food.name || 'Identified Dish';
+      if (detectedBrand) detectedBrand.textContent = `${food.portion || 'Estimated portion'} • ${food.summary || 'AI Vision Recognized'}`;
+      if (detectedCalories) detectedCalories.textContent = `${food.calories} kcal`;
+      if (detectedMacros) {
+        detectedMacros.innerHTML = `<span>Protein: ${food.protein}g</span> • <span>Carbs: ${food.carbs}g</span> • <span>Fat: ${food.fats}g</span> • <span>Fiber: ${food.fiber || 0}g</span>`;
+      }
+
+      const targetMeal = currentTargetMeal || getAutoMealTypeByTime();
+      const capitalizedMeal = targetMeal.charAt(0).toUpperCase() + targetMeal.slice(1);
+      if (confirmLogScannedBtn) {
+        confirmLogScannedBtn.textContent = `Add to ${capitalizedMeal} Log`;
+      }
+
+      state.scannedItem = {
+        name: food.name || 'Identified Dish',
+        portion: food.portion || 'AI Camera Portion',
+        cal: food.calories || 0,
+        p: food.protein || 0,
+        c: food.carbs || 0,
+        f: food.fats || 0,
+        fib: food.fiber || 0,
+        mealType: targetMeal
+      };
+
+      if (detectedFoodCard) {
+        detectedFoodCard.style.display = 'block';
+        detectedFoodCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      showToast(`✨ Identified "${food.name}" (${food.calories} kcal)`);
+    } catch (err) {
+      console.error('[FitTrack Camera] AI Vision error:', err);
+      showToast(`❌ ${err.message || 'Error analyzing photo'}`);
+    } finally {
+      if (cameraAiLoading) cameraAiLoading.style.display = 'none';
     }
-  });
+  }
 
-  let torchOn = false;
-  torchToggle.addEventListener('click', () => {
-    torchOn = !torchOn;
-    torchToggle.textContent = `Flash: ${torchOn ? 'On' : 'Off'}`;
-    torchToggle.style.background = torchOn ? '#FFFFFF' : 'rgba(255, 255, 255, 0.15)';
-    torchToggle.style.color = torchOn ? '#1A1A1A' : '#FFFFFF';
-  });
+  // Snap Photo Button
+  if (snapPhotoBtn) {
+    snapPhotoBtn.addEventListener('click', () => {
+      if (cameraStream && cameraVideo && cameraVideo.videoWidth > 0 && cameraVideo.videoHeight > 0) {
+        const vw = cameraVideo.videoWidth;
+        const vh = cameraVideo.videoHeight;
+        const maxDim = 1280;
+        let dw = vw;
+        let dh = vh;
+        if (dw > maxDim || dh > maxDim) {
+          if (dw > dh) {
+            dh = Math.round((dh * maxDim) / dw);
+            dw = maxDim;
+          } else {
+            dw = Math.round((dw * maxDim) / dh);
+            dh = maxDim;
+          }
+        }
+        cameraCanvas.width = dw;
+        cameraCanvas.height = dh;
+        const ctx = cameraCanvas.getContext('2d');
+        ctx.drawImage(cameraVideo, 0, 0, dw, dh);
+        const dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.82);
+
+        if (cameraSnapshotPreview) {
+          cameraSnapshotPreview.src = dataUrl;
+          cameraSnapshotPreview.style.display = 'block';
+        }
+        if (cameraVideo) cameraVideo.style.display = 'none';
+        if (retakePhotoBtn) retakePhotoBtn.style.display = 'inline-flex';
+
+        stopCameraStream();
+        analyzeFoodImage(dataUrl);
+      } else {
+        if (cameraFileInput) cameraFileInput.click();
+      }
+    });
+  }
+
+  // Upload Photo Button
+  if (uploadPhotoBtn) {
+    uploadPhotoBtn.addEventListener('click', () => {
+      if (cameraFileInput) cameraFileInput.click();
+    });
+  }
+
+  // Native File/Camera Picker Change
+  if (cameraFileInput) {
+    cameraFileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target.result;
+        if (cameraSnapshotPreview) {
+          cameraSnapshotPreview.src = dataUrl;
+          cameraSnapshotPreview.style.display = 'block';
+        }
+        if (cameraVideo) cameraVideo.style.display = 'none';
+        if (retakePhotoBtn) retakePhotoBtn.style.display = 'inline-flex';
+        stopCameraStream();
+        analyzeFoodImage(dataUrl);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Retake Photo Button
+  if (retakePhotoBtn) {
+    retakePhotoBtn.addEventListener('click', () => {
+      if (detectedFoodCard) detectedFoodCard.style.display = 'none';
+      if (cameraSnapshotPreview) {
+        cameraSnapshotPreview.src = '';
+        cameraSnapshotPreview.style.display = 'none';
+      }
+      retakePhotoBtn.style.display = 'none';
+      state.scannedItem = null;
+      if (cameraFileInput) cameraFileInput.value = '';
+      startCameraStream();
+    });
+  }
+
+  // Confirm Log Scanned Item to Today's Meal
+  if (confirmLogScannedBtn) {
+    confirmLogScannedBtn.addEventListener('click', () => {
+      if (state.scannedItem) {
+        const item = state.scannedItem;
+        if (item.mealType) currentTargetMeal = item.mealType;
+        logFoodItem(
+          item.name,
+          item.portion,
+          item.cal,
+          item.p,
+          item.c,
+          item.f,
+          item.fib
+        );
+        showToast(`✅ Logged ${item.name} (${item.cal} kcal) to ${currentTargetMeal}!`);
+        state.scannedItem = null;
+        if (detectedFoodCard) detectedFoodCard.style.display = 'none';
+        closeScanner();
+      }
+    });
+  }
 
   // ================= MODE 2: SEARCH ITEM & QUANTITY =================
   const searchItemInput = document.getElementById('searchItemName');

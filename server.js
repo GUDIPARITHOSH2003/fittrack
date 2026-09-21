@@ -225,6 +225,134 @@ Respond strictly with valid JSON only matching this format:
   throw lastError || new Error('All Gemini models failed');
 }
 
+async function callGeminiVision(apiKey, imageBase64, mimeType = 'image/jpeg') {
+  // Strip data URL prefix if present
+  let cleanBase64 = imageBase64;
+  if (cleanBase64.includes(',')) {
+    cleanBase64 = cleanBase64.split(',')[1];
+  }
+  cleanBase64 = cleanBase64.trim();
+
+  const systemPrompt = `You are an expert clinical sports dietitian and food recognition AI.
+Examine this photo carefully.
+1. Determine if this image contains any edible food, meal, grocery ingredient, dish, or beverage.
+2. If it is NOT food (e.g. empty plate, table, person, pet, screen, household object, or completely unrecognizable/blurry), output strictly JSON:
+{
+  "isFood": false,
+  "error": "No recognizable food detected in this photo. Please take a clear picture of your meal."
+}
+3. If it IS food:
+- Identify the specific dish or food item(s) (e.g. 'Grilled Salmon with Brown Rice and Broccoli', 'Chicken Caesar Salad', 'Banana Oatmeal Bowl').
+- Estimate the realistic portion size based on visual plate proportions (e.g. '1 bowl (300g)', '1 plate (350g)', '2 slices (120g)').
+- Calculate total realistic nutritional breakdown based on USDA FoodData Central.
+- Return strictly valid JSON:
+{
+  "isFood": true,
+  "name": "Standardized Dish or Food Name",
+  "portion": "Estimated Portion (e.g. 300g serving)",
+  "calories": 420,
+  "protein": 34.0,
+  "carbs": 45.0,
+  "fats": 12.0,
+  "fiber": 5.0,
+  "confidence": "high",
+  "summary": "Short 1-line nutritional summary of the meal and ingredients"
+}`;
+
+  let lastError = null;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      console.log(`[Google Gemini Vision] Analyzing food photo with ${model}...`);
+      const bodyPayload = JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: mimeType || 'image/jpeg',
+                  data: cleanBase64
+                }
+              },
+              { text: systemPrompt }
+            ]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: "application/json",
+          temperature: 0.1
+        }
+      });
+
+      const responseText = await new Promise((resolve, reject) => {
+        const req = https.request({
+          hostname: 'generativelanguage.googleapis.com',
+          path: `/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 15000
+        }, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(data);
+            } else {
+              reject(new Error(`Gemini Vision HTTP ${res.statusCode}: ${data}`));
+            }
+          });
+        });
+
+        req.on('error', reject);
+        req.on('timeout', () => {
+          req.destroy();
+          reject(new Error(`Gemini Vision timeout with model ${model}`));
+        });
+        req.write(bodyPayload);
+        req.end();
+      });
+
+      const parsedRes = JSON.parse(responseText);
+      const textPart = parsedRes?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textPart) throw new Error('Empty response from Gemini Vision');
+
+      let cleanJson = textPart.trim();
+      if (cleanJson.startsWith('```')) {
+        cleanJson = cleanJson.replace(/^```(json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      }
+      const match = cleanJson.match(/\{[\s\S]*\}/);
+      if (match) cleanJson = match[0];
+
+      const json = JSON.parse(cleanJson);
+      if (json.isFood === false) {
+        return { isFood: false, error: json.error || "No recognizable food detected in this photo." };
+      }
+
+      return {
+        isFood: true,
+        source: 'gemini_vision',
+        model: model,
+        data: {
+          name: json.name || 'Recognized Meal',
+          portion: json.portion || '1 serving',
+          calories: Math.max(0, Math.round(Number(json.calories) || 0)),
+          protein: Math.max(0, Math.round((Number(json.protein) || 0) * 10) / 10),
+          carbs: Math.max(0, Math.round((Number(json.carbs) || 0) * 10) / 10),
+          fats: Math.max(0, Math.round((Number(json.fats) || 0) * 10) / 10),
+          fiber: Math.max(0, Math.round((Number(json.fiber) || 0) * 10) / 10),
+          confidence: json.confidence || 'high',
+          summary: json.summary || `AI estimated nutrition from camera photo`
+        }
+      };
+    } catch (err) {
+      console.warn(`[Google Gemini Vision] Model ${model} failed:`, err.message);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('All Gemini Vision models failed');
+}
+
 const OPENROUTER_FREE_MODELS = [
   'meta-llama/llama-3.2-3b-instruct:free',
   'google/gemini-2.0-flash-lite-preview-02-05:free',
@@ -815,12 +943,12 @@ function getUserFavorites(userKey) {
 }
 
 // Helper to parse JSON request bodies
-function parseJsonBody(req) {
+function parseJsonBody(req, maxBytes = 10 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', chunk => {
       body += chunk;
-      if (body.length > 1e6) {
+      if (body.length > maxBytes) {
         req.destroy();
         reject(new Error('Payload too large'));
       }
@@ -1779,6 +1907,51 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('[API] Error in NLP meal parse:', err);
       return sendJson(res, 500, { success: false, isFood: false, error: 'Failed to process meal input' });
+    }
+  }
+
+  // 12e. POST /api/ai/camera-nutrition (Analyze meal photo in-memory with Google Gemini Vision)
+  if (pathname === '/api/ai/camera-nutrition' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody(req, 10 * 1024 * 1024);
+      const imageBase64 = (body.imageBase64 || body.image || '').trim();
+      const mimeType = (body.mimeType || 'image/jpeg').trim();
+
+      if (!imageBase64) {
+        return sendJson(res, 400, { success: false, isFood: false, error: 'No image data provided. Please snap a photo.' });
+      }
+
+      const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
+      if (!geminiKey) {
+        return sendJson(res, 200, {
+          success: false,
+          isFood: false,
+          error: 'Gemini Vision AI is not configured. Please ensure GEMINI_API_KEY is active.'
+        });
+      }
+
+      try {
+        const visionResult = await callGeminiVision(geminiKey, imageBase64, mimeType);
+        if (visionResult.isFood === false) {
+          return sendJson(res, 200, { success: false, isFood: false, error: visionResult.error });
+        }
+        return sendJson(res, 200, {
+          success: true,
+          isFood: true,
+          source: 'gemini_vision',
+          data: visionResult.data
+        });
+      } catch (visionErr) {
+        console.warn('[Gemini Vision] Image analysis error:', visionErr.message);
+        return sendJson(res, 200, {
+          success: false,
+          isFood: false,
+          error: 'AI Vision could not recognize food in this image. Please take a clearer photo under good lighting.'
+        });
+      }
+    } catch (err) {
+      console.error('[API] Error in camera nutrition analysis:', err);
+      return sendJson(res, 500, { success: false, isFood: false, error: 'Failed to process image' });
     }
   }
 
