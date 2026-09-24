@@ -56,3 +56,22 @@ CREATE TABLE IF NOT EXISTS favorites (
 );
 
 CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);
+
+-- 4. Weekly Food Photo Diary & Accountability Tracker
+CREATE TABLE IF NOT EXISTS weekly_meals (
+  id VARCHAR(64) PRIMARY KEY,
+  user_email VARCHAR(255) NOT NULL,
+  week_id VARCHAR(32) NOT NULL, -- Format: YYYY-Www (e.g. 2026-W39)
+  day VARCHAR(10) NOT NULL, -- mon, tue, wed, thu, fri, sat, sun
+  title TEXT NOT NULL,
+  meal_slot VARCHAR(50),
+  time VARCHAR(50),
+  calories INTEGER DEFAULT 0,
+  is_cheat BOOLEAN DEFAULT FALSE,
+  notes TEXT,
+  img TEXT,
+  created_at BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_weekly_meals_user_week ON weekly_meals(user_email, week_id);
+CREATE INDEX IF NOT EXISTS idx_weekly_meals_day ON weekly_meals(day);

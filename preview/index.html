@@ -468,7 +468,7 @@
               <div style="flex: 1; padding-right: 12px;">
                 <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
                   <span style="font-size: 9.5px; font-weight: 800; background: rgba(212,241,98,0.22); color: #D4F162; padding: 2px 7px; border-radius: 6px; letter-spacing: 0.5px;">📸 WEEKLY PHOTO LOG</span>
-                  <span style="font-size: 11px; color: #9CA3AF;" id="nutritionWeeklyCheatTag">3 Cheat Meals Logged</span>
+                  <span style="font-size: 11px; color: #9CA3AF;" id="nutritionWeeklyCheatTag">0 Cheat Meals Tracked</span>
                 </div>
                 <h4 style="font-size: 14px; font-weight: 700; color: #FFFFFF; margin: 0 0 2px 0;">Weekly Food &amp; Cheat Diary</h4>
                 <p style="font-size: 11px; color: #D1D5DB; margin: 0;">See all photos eaten Mon–Sun &amp; hold yourself accountable!</p>
@@ -562,25 +562,25 @@
                   <p class="weekly-acc-sub">Review every meal photo to eliminate cheat habits</p>
                 </div>
               </div>
-              <div class="weekly-diet-badge" id="weeklyDietScoreBadge">88% Clean</div>
+              <div class="weekly-diet-badge" id="weeklyDietScoreBadge">100% Clean</div>
             </div>
 
             <!-- Stats 4-Row Grid -->
             <div class="weekly-stats-row">
               <div class="weekly-stat-cell">
-                <span class="weekly-stat-val" id="statWeeklyTotal">25</span>
+                <span class="weekly-stat-val" id="statWeeklyTotal">0</span>
                 <span class="weekly-stat-label">Meals Logged</span>
               </div>
               <div class="weekly-stat-cell">
-                <span class="weekly-stat-val clean-val" id="statWeeklyClean">22</span>
+                <span class="weekly-stat-val clean-val" id="statWeeklyClean">0</span>
                 <span class="weekly-stat-label">Clean Meals 🥗</span>
               </div>
               <div class="weekly-stat-cell">
-                <span class="weekly-stat-val cheat-val" id="statWeeklyCheat">3</span>
+                <span class="weekly-stat-val cheat-val" id="statWeeklyCheat">0</span>
                 <span class="weekly-stat-label">Cheat Meals 🍕</span>
               </div>
               <div class="weekly-stat-cell">
-                <span class="weekly-stat-val" id="statWeeklyDays">7/7</span>
+                <span class="weekly-stat-val" id="statWeeklyDays">0/7</span>
                 <span class="weekly-stat-label">Days Tracked</span>
               </div>
             </div>
@@ -588,20 +588,12 @@
             <!-- Ratio Progress Bar -->
             <div class="weekly-progress-wrap">
               <div class="weekly-progress-bar">
-                <div class="weekly-progress-clean" id="weeklyProgressClean" style="width: 88%;"></div>
-                <div class="weekly-progress-cheat" id="weeklyProgressCheat" style="width: 12%;"></div>
+                <div class="weekly-progress-clean" id="weeklyProgressClean" style="width: 100%;"></div>
+                <div class="weekly-progress-cheat" id="weeklyProgressCheat" style="width: 0%;"></div>
               </div>
               <div class="weekly-progress-legend">
                 <span><span class="legend-dot clean-dot"></span> Clean Meals</span>
-                <span><span class="legend-dot cheat-dot"></span> Cheat Meals (Look Below)</span>
-              </div>
-            </div>
-
-            <!-- Accountability Advice Callout -->
-            <div class="weekly-cheat-callout" id="weeklyCheatCallout">
-              <div class="cheat-callout-icon">⚠️</div>
-              <div class="cheat-callout-text" id="weeklyCheatCalloutText">
-                <strong>Cheat Meal Alert:</strong> 3 cheat meals logged this week (Pizza on Wed, Burger on Fri, Brownie on Sun). Seeing the photos keeps you disciplined so you don't repeat them!
+                <span><span class="legend-dot cheat-dot"></span> Cheat Meals</span>
               </div>
             </div>
           </div>
@@ -615,45 +607,45 @@
 
           <!-- 7-Day Filter Chips Row + Full Week Mosaic Tab -->
           <div class="day-chips-scroll" id="weeklyDayChipsRow">
-            <button class="day-chip active" data-day="mon">
+            <button class="day-chip" data-day="mon" id="dayChipMon">
               <span class="day-name">MON</span>
-              <span class="day-count" id="countBadgeMon">5</span>
+              <span class="day-count" id="countBadgeMon">0</span>
             </button>
-            <button class="day-chip" data-day="tue">
+            <button class="day-chip" data-day="tue" id="dayChipTue">
               <span class="day-name">TUE</span>
-              <span class="day-count" id="countBadgeTue">4</span>
+              <span class="day-count" id="countBadgeTue">0</span>
             </button>
-            <button class="day-chip" data-day="wed">
+            <button class="day-chip" data-day="wed" id="dayChipWed">
               <span class="day-name">WED</span>
-              <span class="day-count alert-count" id="countBadgeWed">4</span>
+              <span class="day-count" id="countBadgeWed">0</span>
             </button>
-            <button class="day-chip" data-day="thu">
+            <button class="day-chip" data-day="thu" id="dayChipThu">
               <span class="day-name">THU</span>
-              <span class="day-count" id="countBadgeThu">4</span>
+              <span class="day-count" id="countBadgeThu">0</span>
             </button>
-            <button class="day-chip" data-day="fri">
+            <button class="day-chip" data-day="fri" id="dayChipFri">
               <span class="day-name">FRI</span>
-              <span class="day-count alert-count" id="countBadgeFri">4</span>
+              <span class="day-count" id="countBadgeFri">0</span>
             </button>
-            <button class="day-chip" data-day="sat">
+            <button class="day-chip" data-day="sat" id="dayChipSat">
               <span class="day-name">SAT</span>
-              <span class="day-count" id="countBadgeSat">3</span>
+              <span class="day-count" id="countBadgeSat">0</span>
             </button>
-            <button class="day-chip" data-day="sun">
+            <button class="day-chip" data-day="sun" id="dayChipSun">
               <span class="day-name">SUN</span>
-              <span class="day-count alert-count" id="countBadgeSun">3</span>
+              <span class="day-count" id="countBadgeSun">0</span>
             </button>
-            <button class="day-chip all-week-chip" data-day="all">
+            <button class="day-chip all-week-chip" data-day="all" id="dayChipAll">
               <span class="day-name">✨ ALL WEEK</span>
-              <span class="day-count" id="countBadgeAll">27</span>
+              <span class="day-count" id="countBadgeAll">0</span>
             </button>
           </div>
 
           <!-- Day View Active Header & Action Bar -->
           <div class="day-view-action-bar">
             <div>
-              <h2 class="day-view-heading" id="activeDayHeading">Monday's Meals</h2>
-              <p class="day-view-sub" id="activeDaySub">5 photos logged • All meals clean</p>
+              <h2 class="day-view-heading" id="activeDayHeading">Today's Meals</h2>
+              <p class="day-view-sub" id="activeDaySub">No photos logged yet today</p>
             </div>
             <button class="pill-btn secondary" id="dayAddMealPhotoBtn" style="font-size: 11px; padding: 6px 12px; font-weight: 700; border-radius: 16px;">
               + Add Meal Photo

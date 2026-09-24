@@ -1777,6 +1777,152 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // ==================== 11d. WEEKLY FOOD PHOTO DIARY API ====================
+  function getIsoWeekId(date = new Date(), offsetWeeks = 0) {
+    const d = new Date(date);
+    if (offsetWeeks) {
+      d.setDate(d.getDate() + (offsetWeeks * 7));
+    }
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return `${d.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+  }
+
+  // 11d-1. GET /api/weekly-diary (Fetch all meals grouped by day for specified or current week)
+  if (pathname === '/api/weekly-diary' && req.method === 'GET') {
+    try {
+      const user = await getAuthenticatedUser(req, query);
+      const userEmail = user ? user.email : (query.email ? query.email.toLowerCase().trim() : 'guest@fittrack.local');
+      const offset = parseInt(query.offset || '0', 10) || 0;
+      const weekId = (query.weekId && query.weekId.trim()) || getIsoWeekId(new Date(), offset);
+
+      const mealsList = await db.getWeeklyMeals(userEmail, weekId);
+      const grouped = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
+
+      mealsList.forEach(m => {
+        const d = (m.day || 'mon').toLowerCase().trim();
+        if (grouped[d]) {
+          grouped[d].push(m);
+        } else {
+          grouped[d] = [m];
+        }
+      });
+
+      return sendJson(res, 200, {
+        success: true,
+        weekId,
+        userEmail,
+        totalMeals: mealsList.length,
+        meals: grouped
+      });
+    } catch (err) {
+      console.error('[API] Error in GET /api/weekly-diary:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to fetch weekly diary' });
+    }
+  }
+
+  // 11d-2. POST /api/weekly-diary (Add food meal photo to weekly diary)
+  if (pathname === '/api/weekly-diary' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody(req, 10 * 1024 * 1024);
+      const user = await getAuthenticatedUser(req, body);
+      const userEmail = user ? user.email : (body.email ? body.email.toLowerCase().trim() : 'guest@fittrack.local');
+      const weekId = (body.weekId && body.weekId.trim()) || getIsoWeekId();
+
+      const mealData = {
+        id: body.id,
+        userEmail,
+        weekId,
+        day: body.day || 'mon',
+        title: body.title || 'Meal Photo',
+        mealSlot: body.mealSlot || 'Lunch',
+        time: body.time || '',
+        calories: parseInt(body.calories, 10) || 0,
+        isCheat: Boolean(body.isCheat),
+        notes: body.notes || '',
+        img: body.img || '',
+        createdAt: body.createdAt || Date.now()
+      };
+
+      const savedMeal = await db.addWeeklyMeal(mealData);
+      console.log(`[API] Saved weekly meal "${savedMeal.title}" (${savedMeal.day}) for ${userEmail}`);
+
+      return sendJson(res, 201, {
+        success: true,
+        message: 'Meal photo logged to diary successfully',
+        meal: savedMeal
+      });
+    } catch (err) {
+      console.error('[API] Error in POST /api/weekly-diary:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to add meal photo to diary' });
+    }
+  }
+
+  // 11d-3. DELETE /api/weekly-diary (Delete meal photo)
+  if ((pathname === '/api/weekly-diary' || pathname.startsWith('/api/weekly-diary/')) && req.method === 'DELETE') {
+    try {
+      let mealId = query.id;
+      if (!mealId && pathname.startsWith('/api/weekly-diary/')) {
+        const parts = pathname.split('/');
+        mealId = parts[3];
+      }
+      let emailParam = query.email;
+      if (!mealId) {
+        const body = await parseJsonBody(req).catch(() => ({}));
+        mealId = body.id;
+        if (body.email) emailParam = body.email;
+      }
+
+      if (!mealId) {
+        return sendJson(res, 400, { success: false, message: 'Meal ID is required' });
+      }
+
+      const user = await getAuthenticatedUser(req, { email: emailParam });
+      const userEmail = user ? user.email : (emailParam ? emailParam.toLowerCase().trim() : 'guest@fittrack.local');
+
+      const deleted = await db.deleteWeeklyMeal(mealId, userEmail);
+      return sendJson(res, 200, {
+        success: true,
+        deleted,
+        id: mealId,
+        message: deleted ? 'Meal photo removed' : 'Meal not found'
+      });
+    } catch (err) {
+      console.error('[API] Error in DELETE /api/weekly-diary:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to delete meal photo' });
+    }
+  }
+
+  // 11d-4. PATCH /api/weekly-diary/cheat-toggle (Toggle cheat meal status)
+  if (pathname === '/api/weekly-diary/cheat-toggle' && (req.method === 'PATCH' || req.method === 'POST')) {
+    try {
+      const body = await parseJsonBody(req);
+      const { id, isCheat, email } = body;
+
+      if (!id) {
+        return sendJson(res, 400, { success: false, message: 'Meal ID is required' });
+      }
+
+      const user = await getAuthenticatedUser(req, { email });
+      const userEmail = user ? user.email : (email ? email.toLowerCase().trim() : 'guest@fittrack.local');
+
+      const updated = await db.toggleWeeklyMealCheat(id, userEmail, isCheat);
+      if (!updated) {
+        return sendJson(res, 404, { success: false, message: 'Meal not found or not owned by user' });
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Cheat status updated',
+        meal: updated
+      });
+    } catch (err) {
+      console.error('[API] Error in PATCH /api/weekly-diary/cheat-toggle:', err);
+      return sendJson(res, 500, { success: false, message: 'Failed to update cheat status' });
+    }
+  }
+
   // ==================== 12. OPENROUTER AI NUTRITION LOOKUP API ====================
   // 12a. GET /api/ai/config (Check AI status)
   if (pathname === '/api/ai/config' && req.method === 'GET') {

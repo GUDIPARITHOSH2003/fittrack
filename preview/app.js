@@ -765,6 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof updateWorkoutHeroUI === 'function') updateWorkoutHeroUI();
     } else if (targetTabId === 'tabWeeklyMeals') {
       if (typeof renderWeeklyMealsUI === 'function') renderWeeklyMealsUI();
+      if (typeof fetchWeeklyDiaryFromBackend === 'function') fetchWeeklyDiaryFromBackend();
     }
   }
 
@@ -4552,307 +4553,35 @@ document.addEventListener('DOMContentLoaded', () => {
     return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="360" viewBox="0 0 600 360"><rect width="600" height="360" fill="%232D3748"/><circle cx="300" cy="180" r="110" fill="%234A5568"/><circle cx="300" cy="180" r="85" fill="%23E2E8F0"/><text x="300" y="175" fill="%232D3748" font-size="48" text-anchor="middle" font-family="sans-serif">🍱</text><text x="300" y="215" fill="%231A202C" font-size="18" font-weight="bold" text-anchor="middle" font-family="sans-serif">${encodeURIComponent(safeTitle)}</text></svg>`;
   }
 
-  // Realistic default seed data showing 5 meals on Monday, clean meals, and cheat accountability
+  // Clean default data with zero dummy entries
   const defaultWeeklyDiaryData = {
-    mon: [
-      {
-        id: "m_mon_1",
-        title: "Rolled Oatmeal & Mixed Berries",
-        mealSlot: "Breakfast",
-        time: "8:00 AM",
-        calories: 380,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?w=600",
-        notes: "Fuel for morning workout"
-      },
-      {
-        id: "m_mon_2",
-        title: "Grilled Chicken & Quinoa Salad",
-        mealSlot: "Lunch",
-        time: "1:00 PM",
-        calories: 520,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600",
-        notes: "High protein meal prep"
-      },
-      {
-        id: "m_mon_3",
-        title: "Greek Yogurt & Raw Almonds",
-        mealSlot: "Snack",
-        time: "4:15 PM",
-        calories: 220,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=600",
-        notes: "Clean afternoon snack"
-      },
-      {
-        id: "m_mon_4",
-        title: "Herb Crusted Salmon & Sweet Potato",
-        mealSlot: "Dinner",
-        time: "7:45 PM",
-        calories: 580,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=600",
-        notes: "Rich in omega 3 & clean carbs"
-      },
-      {
-        id: "m_mon_5",
-        title: "Whey Isolate Protein Shake",
-        mealSlot: "Late Night",
-        time: "10:00 PM",
-        calories: 140,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1579722820308-d74e571900a9?w=600",
-        notes: "Pre-bed recovery shake"
-      }
-    ],
-    tue: [
-      {
-        id: "m_tue_1",
-        title: "Poached Eggs on Sourdough",
-        mealSlot: "Breakfast",
-        time: "8:30 AM",
-        calories: 390,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=600",
-        notes: "Solid protein foundation"
-      },
-      {
-        id: "m_tue_2",
-        title: "Roasted Turkey Breast Wrap",
-        mealSlot: "Lunch",
-        time: "1:15 PM",
-        calories: 460,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=600",
-        notes: "Whole wheat wrap with spinach"
-      },
-      {
-        id: "m_tue_3",
-        title: "Green Apple & Peanut Butter",
-        mealSlot: "Snack",
-        time: "4:45 PM",
-        calories: 210,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=600",
-        notes: "Fiber & healthy fats"
-      },
-      {
-        id: "m_tue_4",
-        title: "Lean Beef Stir-Fry with Broccoli",
-        mealSlot: "Dinner",
-        time: "8:00 PM",
-        calories: 550,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1544025162-d76694265947?w=600",
-        notes: "Low oil, lots of greens"
-      }
-    ],
-    wed: [
-      {
-        id: "m_wed_1",
-        title: "Berry Banana Protein Smoothie",
-        mealSlot: "Breakfast",
-        time: "8:15 AM",
-        calories: 340,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1553530666-ba11a7da3888?w=600",
-        notes: "Quick blend before commute"
-      },
-      {
-        id: "m_wed_2",
-        title: "Chicken Breast & Brown Rice",
-        mealSlot: "Lunch",
-        time: "1:00 PM",
-        calories: 490,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600",
-        notes: "Standard clean prep"
-      },
-      {
-        id: "m_wed_3",
-        title: "Handful of Raw Walnuts",
-        mealSlot: "Snack",
-        time: "4:30 PM",
-        calories: 190,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1508746829417-e6f548d8d6ed?w=600",
-        notes: "Brain food"
-      },
-      {
-        id: "m_wed_4",
-        title: "Pepperoni Pizza & Garlic Knots",
-        mealSlot: "Dinner",
-        time: "8:30 PM",
-        calories: 980,
-        isCheat: true,
-        img: "https://images.unsplash.com/photo-1534308983496-4fabb1a015ee?w=600",
-        notes: "Late night takeout after overtime — review photo to avoid repeating!"
-      }
-    ],
-    thu: [
-      {
-        id: "m_thu_1",
-        title: "Chia Seed Pudding with Mango",
-        mealSlot: "Breakfast",
-        time: "8:00 AM",
-        calories: 320,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=600",
-        notes: "Gut health reset"
-      },
-      {
-        id: "m_thu_2",
-        title: "Tuna Avocado Salad Bowl",
-        mealSlot: "Lunch",
-        time: "1:30 PM",
-        calories: 440,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600",
-        notes: "Clean recovery meal"
-      },
-      {
-        id: "m_thu_3",
-        title: "Organic Rice Cakes with Hummus",
-        mealSlot: "Snack",
-        time: "4:00 PM",
-        calories: 160,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=600",
-        notes: "Light pre-workout carb"
-      },
-      {
-        id: "m_thu_4",
-        title: "Grilled Herb Chicken Breast & Greens",
-        mealSlot: "Dinner",
-        time: "7:30 PM",
-        calories: 480,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600",
-        notes: "Back 100% on track"
-      }
-    ],
-    fri: [
-      {
-        id: "m_fri_1",
-        title: "Egg White Spinach Omelette",
-        mealSlot: "Breakfast",
-        time: "8:15 AM",
-        calories: 310,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=600",
-        notes: "High volume greens"
-      },
-      {
-        id: "m_fri_2",
-        title: "Quinoa Edamame Protein Bowl",
-        mealSlot: "Lunch",
-        time: "1:00 PM",
-        calories: 460,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600",
-        notes: "Plant fiber power"
-      },
-      {
-        id: "m_fri_3",
-        title: "Dark Chocolate Protein Bar",
-        mealSlot: "Snack",
-        time: "4:30 PM",
-        calories: 210,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1579722820308-d74e571900a9?w=600",
-        notes: "Sweet craving satisfied cleanly"
-      },
-      {
-        id: "m_fri_4",
-        title: "Double Bacon Cheeseburger & Fries",
-        mealSlot: "Dinner",
-        time: "9:00 PM",
-        calories: 1120,
-        isCheat: true,
-        img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600",
-        notes: "Friday dinner with friends — acknowledged cheat, staying accountable!"
-      }
-    ],
-    sat: [
-      {
-        id: "m_sat_1",
-        title: "Protein Oat Pancakes & Strawberries",
-        mealSlot: "Breakfast",
-        time: "9:30 AM",
-        calories: 450,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1528207776546-365bb710ee93?w=600",
-        notes: "Weekend breakfast"
-      },
-      {
-        id: "m_sat_2",
-        title: "Grilled Chicken Caesar Salad",
-        mealSlot: "Lunch",
-        time: "2:00 PM",
-        calories: 420,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600",
-        notes: "Light dressing"
-      },
-      {
-        id: "m_sat_3",
-        title: "Seared Ribeye Steak & Asparagus",
-        mealSlot: "Dinner",
-        time: "8:00 PM",
-        calories: 680,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1544025162-d76694265947?w=600",
-        notes: "Clean keto style dinner"
-      }
-    ],
-    sun: [
-      {
-        id: "m_sun_1",
-        title: "Avocado & Sunny-side Up Eggs",
-        mealSlot: "Breakfast",
-        time: "9:00 AM",
-        calories: 420,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=600",
-        notes: "Sunday morning fuel"
-      },
-      {
-        id: "m_sun_2",
-        title: "Roast Chicken & Steamed Greens",
-        mealSlot: "Lunch",
-        time: "2:30 PM",
-        calories: 520,
-        isCheat: false,
-        img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600",
-        notes: "Weekly meal planning session"
-      },
-      {
-        id: "m_sun_3",
-        title: "Warm Fudge Brownie & Ice Cream",
-        mealSlot: "Snack",
-        time: "6:00 PM",
-        calories: 640,
-        isCheat: true,
-        img: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600",
-        notes: "Sunday family dessert cheat — looking at photo reminds me to start fresh Monday!"
-      }
-    ]
+    mon: [],
+    tue: [],
+    wed: [],
+    thu: [],
+    fri: [],
+    sat: [],
+    sun: []
   };
 
-  let weeklyDiaryData = null;
+  let weeklyDiaryData = JSON.parse(JSON.stringify(defaultWeeklyDiaryData));
+
+  // Purge any legacy dummy placeholder seed data from localStorage
   try {
     const savedDiary = localStorage.getItem('fittrack_weekly_diary_v1');
     if (savedDiary) {
-      weeklyDiaryData = JSON.parse(savedDiary);
+      if (savedDiary.includes('Rolled Oatmeal') || savedDiary.includes('m_mon_1') || savedDiary.includes('m_sun_3')) {
+        console.log('[WeeklyDiary] Purging dummy placeholder seed data from localStorage...');
+        localStorage.removeItem('fittrack_weekly_diary_v1');
+      } else {
+        const parsed = JSON.parse(savedDiary);
+        if (parsed && typeof parsed === 'object' && parsed.mon) {
+          weeklyDiaryData = parsed;
+        }
+      }
     }
   } catch (e) {
     console.warn('[WeeklyDiary] Failed to parse localStorage diary data:', e);
-  }
-
-  if (!weeklyDiaryData || typeof weeklyDiaryData !== 'object' || !weeklyDiaryData.mon) {
-    weeklyDiaryData = JSON.parse(JSON.stringify(defaultWeeklyDiaryData));
-    localStorage.setItem('fittrack_weekly_diary_v1', JSON.stringify(weeklyDiaryData));
   }
 
   function saveWeeklyDiaryData() {
@@ -4863,7 +4592,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  let currentDiaryDay = 'mon';
+  function getCurrentWeekDayIndex() {
+    const day = new Date().getDay(); // 0 is Sunday, 1 is Monday ... 6 is Saturday
+    return (day + 6) % 7; // 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+  }
+
+  const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
   const dayNamesMap = {
     mon: "Monday",
@@ -4875,13 +4609,110 @@ document.addEventListener('DOMContentLoaded', () => {
     sun: "Sunday"
   };
 
+  // Start on today's day
+  let currentDiaryDay = dayKeys[getCurrentWeekDayIndex()] || 'mon';
+  let weekOffset = 0;
+
+  // Backend API Sync Helpers
+  function getDiaryAuth() {
+    let email = 'guest@fittrack.local';
+    let token = '';
+    try {
+      const user = JSON.parse(localStorage.getItem('fittrack_user') || '{}');
+      if (user && user.email) email = user.email.toLowerCase().trim();
+      token = localStorage.getItem('fittrack_token') || '';
+    } catch (e) {}
+    return { email, token };
+  }
+
+  async function fetchWeeklyDiaryFromBackend() {
+    try {
+      const { email, token } = getDiaryAuth();
+      const headers = { 'X-User-Email': email };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/weekly-diary?offset=${weekOffset}&email=${encodeURIComponent(email)}`, { headers });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.meals) {
+          weeklyDiaryData = json.meals;
+          saveWeeklyDiaryData();
+          renderWeeklyMealsUI();
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[WeeklyDiary] Backend fetch error, using local cache:', err);
+    }
+    renderWeeklyMealsUI();
+  }
+
+  async function addWeeklyMealToBackend(newMeal, targetDay) {
+    try {
+      const { email, token } = getDiaryAuth();
+      const headers = { 'Content-Type': 'application/json', 'X-User-Email': email };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/weekly-diary', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          ...newMeal,
+          email,
+          day: targetDay
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.meal) {
+          const list = weeklyDiaryData[targetDay] || [];
+          const localMeal = list.find(m => m.id === newMeal.id);
+          if (localMeal) localMeal.id = json.meal.id;
+          saveWeeklyDiaryData();
+        }
+      }
+    } catch (err) {
+      console.warn('[WeeklyDiary] Failed to sync added meal to backend:', err);
+    }
+  }
+
+  async function deleteWeeklyMealFromBackend(mealId) {
+    try {
+      const { email, token } = getDiaryAuth();
+      const headers = { 'Content-Type': 'application/json', 'X-User-Email': email };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      await fetch(`/api/weekly-diary?id=${encodeURIComponent(mealId)}&email=${encodeURIComponent(email)}`, {
+        method: 'DELETE',
+        headers
+      });
+    } catch (err) {
+      console.warn('[WeeklyDiary] Failed to delete meal from backend:', err);
+    }
+  }
+
+  async function toggleWeeklyCheatInBackend(mealId, isCheat) {
+    try {
+      const { email, token } = getDiaryAuth();
+      const headers = { 'Content-Type': 'application/json', 'X-User-Email': email };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      await fetch('/api/weekly-diary/cheat-toggle', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ id: mealId, isCheat, email })
+      });
+    } catch (err) {
+      console.warn('[WeeklyDiary] Failed to sync cheat toggle to backend:', err);
+    }
+  }
+
   function renderWeeklyMealsUI() {
     // 1. Calculate overall weekly statistics
     const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
     let totalMeals = 0;
     let cleanMeals = 0;
     let cheatMeals = 0;
-    const cheatList = [];
 
     days.forEach(d => {
       const items = weeklyDiaryData[d] || [];
@@ -4889,7 +4720,6 @@ document.addEventListener('DOMContentLoaded', () => {
       items.forEach(item => {
         if (item.isCheat) {
           cheatMeals++;
-          cheatList.push({ day: dayNamesMap[d], title: item.title });
         } else {
           cleanMeals++;
         }
@@ -4897,6 +4727,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const dietScore = totalMeals > 0 ? Math.round((cleanMeals / totalMeals) * 100) : 100;
+    const trackedDaysCount = days.filter(d => (weeklyDiaryData[d] || []).length > 0).length;
 
     // Update KPI Scorecard Elements
     const statTotalEl = document.getElementById('statWeeklyTotal');
@@ -4906,14 +4737,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const scoreBadgeEl = document.getElementById('weeklyDietScoreBadge');
     const progCleanEl = document.getElementById('weeklyProgressClean');
     const progCheatEl = document.getElementById('weeklyProgressCheat');
-    const cheatCalloutEl = document.getElementById('weeklyCheatCallout');
-    const cheatCalloutText = document.getElementById('weeklyCheatCalloutText');
     const nutritionWeeklyCheatTag = document.getElementById('nutritionWeeklyCheatTag');
 
     if (statTotalEl) statTotalEl.textContent = totalMeals;
     if (statCleanEl) statCleanEl.textContent = cleanMeals;
     if (statCheatEl) statCheatEl.textContent = cheatMeals;
-    if (statDaysEl) statDaysEl.textContent = "7/7";
+    if (statDaysEl) statDaysEl.textContent = `${trackedDaysCount}/7`;
 
     if (scoreBadgeEl) {
       scoreBadgeEl.textContent = `${dietScore}% Clean`;
@@ -4929,41 +4758,73 @@ document.addEventListener('DOMContentLoaded', () => {
     if (progCleanEl) progCleanEl.style.width = `${dietScore}%`;
     if (progCheatEl) progCheatEl.style.width = `${100 - dietScore}%`;
 
-    if (cheatCalloutEl && cheatCalloutText) {
-      if (cheatMeals > 0) {
-        const topCheats = cheatList.slice(0, 3).map(c => `${c.title} on ${c.day}`).join(', ');
-        cheatCalloutText.innerHTML = `<strong>Cheat Meal Alert:</strong> ${cheatMeals} cheat meal(s) logged this week (${topCheats}). Looking at your actual photos keeps you accountable so you don't repeat them!`;
-        cheatCalloutEl.style.display = 'flex';
-      } else {
-        cheatCalloutText.innerHTML = `<strong>100% Clean Streak!</strong> Zero cheat meals logged this week. Incredible discipline!`;
-        cheatCalloutEl.style.background = 'rgba(16, 185, 129, 0.08)';
-        cheatCalloutEl.style.borderColor = 'rgba(16, 185, 129, 0.22)';
-        cheatCalloutEl.style.color = '#065F46';
-        cheatCalloutEl.style.display = 'flex';
-      }
-    }
-
     if (nutritionWeeklyCheatTag) {
       nutritionWeeklyCheatTag.textContent = `${cheatMeals} Cheat Meal${cheatMeals === 1 ? '' : 's'} Tracked`;
     }
 
-    // 2. Update day badges in 7-day selector
-    days.forEach(d => {
+    // 2. Future day logic: disable unreached days in 7-day selector
+    const todayIdx = getCurrentWeekDayIndex();
+
+    // If current selected day is in the future, fallback to today
+    if (currentDiaryDay !== 'all') {
+      const activeIdx = dayKeys.indexOf(currentDiaryDay);
+      if (weekOffset === 0 && activeIdx > todayIdx) {
+        currentDiaryDay = dayKeys[todayIdx];
+      }
+    }
+
+    days.forEach((d, idx) => {
       const capKey = d.charAt(0).toUpperCase() + d.slice(1);
+      const chip = document.getElementById(`dayChip${capKey}`);
       const badge = document.getElementById(`countBadge${capKey}`);
-      if (badge) {
-        const count = (weeklyDiaryData[d] || []).length;
-        badge.textContent = count;
-        const hasCheat = (weeklyDiaryData[d] || []).some(m => m.isCheat);
-        if (hasCheat) {
-          badge.classList.add('alert-count');
+      const count = (weeklyDiaryData[d] || []).length;
+      const isFuture = (weekOffset === 0 && idx > todayIdx) || (weekOffset > 0);
+
+      if (chip) {
+        if (isFuture) {
+          chip.classList.add('disabled-future');
+          chip.disabled = true;
+          chip.setAttribute('aria-disabled', 'true');
+          chip.title = `${dayNamesMap[d]} has not happened yet`;
+          if (badge) badge.textContent = '-';
         } else {
-          badge.classList.remove('alert-count');
+          chip.classList.remove('disabled-future');
+          chip.disabled = false;
+          chip.removeAttribute('aria-disabled');
+          chip.title = `View ${dayNamesMap[d]}'s meals`;
+          if (badge) badge.textContent = count;
+        }
+
+        if (currentDiaryDay === d && !isFuture) {
+          chip.classList.add('active');
+        } else {
+          chip.classList.remove('active');
         }
       }
     });
+
+    const allChip = document.getElementById('dayChipAll');
+    if (allChip) {
+      if (currentDiaryDay === 'all') allChip.classList.add('active');
+      else allChip.classList.remove('active');
+    }
     const countBadgeAll = document.getElementById('countBadgeAll');
     if (countBadgeAll) countBadgeAll.textContent = totalMeals;
+
+    // Next week button state
+    if (nextWeekBtn) {
+      if (weekOffset >= 0) {
+        nextWeekBtn.disabled = true;
+        nextWeekBtn.style.opacity = '0.35';
+        nextWeekBtn.style.cursor = 'not-allowed';
+        nextWeekBtn.title = 'Cannot navigate to future weeks';
+      } else {
+        nextWeekBtn.disabled = false;
+        nextWeekBtn.style.opacity = '1';
+        nextWeekBtn.style.cursor = 'pointer';
+        nextWeekBtn.title = 'Next Week';
+      }
+    }
 
     // 3. Render Meals Grid
     const mealsGrid = document.getElementById('weeklyMealsGrid');
@@ -4977,16 +4838,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (headingEl) headingEl.textContent = "Full Week Visual Mosaic";
       if (subEl) subEl.textContent = `All ${totalMeals} meals logged Monday – Sunday`;
 
-      // Render day-by-day sections
-      days.forEach(d => {
+      // Render day-by-day sections (only through today for current week)
+      days.forEach((d, idx) => {
+        const isFuture = (weekOffset === 0 && idx > todayIdx) || (weekOffset > 0);
+        if (isFuture) return; // Don't show unreached days in mosaic
+
         const dayMeals = weeklyDiaryData[d] || [];
         const groupDiv = document.createElement('div');
         groupDiv.className = 'recap-day-group';
 
         const dayName = dayNamesMap[d];
-        const dayClean = dayMeals.filter(m => !m.isCheat).length;
         const dayCheat = dayMeals.filter(m => m.isCheat).length;
-        const cheatText = dayCheat > 0 ? ` • <span style="color:#EF4444; font-weight:700;">${dayCheat} Cheat ⚠️</span>` : ' • Clean';
+        const cheatText = dayCheat > 0 ? ` • ${dayCheat} Cheat` : ' • Clean';
 
         groupDiv.innerHTML = `
           <div class="recap-day-header">
@@ -5006,6 +4869,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         mealsGrid.appendChild(groupDiv);
       });
+
+      if (totalMeals === 0) {
+        mealsGrid.innerHTML = `
+          <div class="card" style="text-align: center; padding: 32px 16px; border-radius: 20px;">
+            <div style="font-size: 38px; margin-bottom: 8px;">📷</div>
+            <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">No Meal Photos Logged This Week</h4>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">Snap a photo of your breakfast, lunch, or dinner to start your visual accountability log!</p>
+            <button class="pill-btn primary" onclick="openAddMealPhotoModalForDay('${dayKeys[todayIdx]}')" style="padding: 9px 18px; font-size: 12px; font-weight: 700; border-radius: 20px;">
+              📸 + Add Today's First Meal
+            </button>
+          </div>
+        `;
+      }
     } else {
       const activeMeals = weeklyDiaryData[currentDiaryDay] || [];
       const dayName = dayNamesMap[currentDiaryDay];
@@ -5013,8 +4889,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (headingEl) headingEl.textContent = `${dayName}'s Meals`;
       if (subEl) {
-        if (cheatCount > 0) {
-          subEl.innerHTML = `${activeMeals.length} photos logged • <span style="color:#EF4444; font-weight:700;">${cheatCount} Cheat Meal${cheatCount === 1 ? '' : 's'} ⚠️</span>`;
+        if (activeMeals.length === 0) {
+          subEl.textContent = 'No photos logged yet today';
+        } else if (cheatCount > 0) {
+          subEl.textContent = `${activeMeals.length} photos logged • ${cheatCount} Cheat Meal${cheatCount === 1 ? '' : 's'}`;
         } else {
           subEl.textContent = `${activeMeals.length} photos logged • 100% clean diet`;
         }
@@ -5046,12 +4924,12 @@ document.addEventListener('DOMContentLoaded', () => {
     card.dataset.day = dayKey;
 
     const statusBadgeHtml = meal.isCheat
-      ? `<span class="meal-status-pill cheat">🍕 CHEAT MEAL ⚠️</span>`
+      ? `<span class="meal-status-pill cheat">🍕 Cheat Meal</span>`
       : `<span class="meal-status-pill clean">🥗 Clean Meal</span>`;
 
-    const cheatNoteHtml = (meal.isCheat && meal.notes)
-      ? `<div class="meal-photo-cheat-note"><span>⚠️</span><span><strong>Accountability Note:</strong> ${escapeHtml(meal.notes)}</span></div>`
-      : (meal.notes ? `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; font-style: italic;">"${escapeHtml(meal.notes)}"</div>` : '');
+    const cheatNoteHtml = meal.notes
+      ? `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; font-style: italic;">"${escapeHtml(meal.notes)}"</div>`
+      : '';
 
     const safeTitle = escapeHtml(meal.title || 'Meal');
     const caloriesText = meal.calories ? `${meal.calories} kcal` : 'Calorie unestimated';
@@ -5071,7 +4949,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${cheatNoteHtml}
         <div class="meal-photo-footer">
           <button type="button" class="meal-photo-action-btn toggle-cheat-btn" title="Toggle Cheat Status">
-            ${meal.isCheat ? 'Mark as Clean 🥗' : 'Mark as Cheat 🍕'}
+            ${meal.isCheat ? 'Mark Clean 🥗' : 'Mark Cheat 🍕'}
           </button>
           <button type="button" class="meal-photo-action-btn delete-btn" title="Delete Photo">
             Delete
@@ -5096,6 +4974,7 @@ document.addEventListener('DOMContentLoaded', () => {
         meal.isCheat = !meal.isCheat;
         saveWeeklyDiaryData();
         renderWeeklyMealsUI();
+        toggleWeeklyCheatInBackend(meal.id, meal.isCheat);
         showToast(meal.isCheat ? '🍕 Marked as Cheat Meal' : '🥗 Marked as Clean Meal');
       });
     }
@@ -5108,10 +4987,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const list = weeklyDiaryData[dayKey] || [];
         const idx = list.findIndex(m => m.id === meal.id);
         if (idx !== -1) {
+          const removedTitle = meal.title;
           list.splice(idx, 1);
           saveWeeklyDiaryData();
           renderWeeklyMealsUI();
-          showToast(`🗑️ Removed "${meal.title}"`);
+          deleteWeeklyMealFromBackend(meal.id);
+          showToast(`🗑️ Removed "${removedTitle}"`);
         }
       });
     }
@@ -5137,12 +5018,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (lightboxTag) {
       if (meal.isCheat) {
-        lightboxTag.textContent = '🍕 CHEAT MEAL ⚠️';
-        lightboxTag.style.background = 'rgba(239, 68, 68, 0.25)';
+        lightboxTag.textContent = '🍕 Cheat Meal';
+        lightboxTag.style.background = 'rgba(239, 68, 68, 0.15)';
         lightboxTag.style.color = '#EF4444';
       } else {
         lightboxTag.textContent = '🥗 Clean Meal';
-        lightboxTag.style.background = 'rgba(16, 185, 129, 0.25)';
+        lightboxTag.style.background = 'rgba(16, 185, 129, 0.15)';
         lightboxTag.style.color = '#10B981';
       }
     }
@@ -5165,13 +5046,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 7-Day Filter Chips Row Event Listener
+  // 7-Day Filter Chips Row Event Listener: strictly ignore clicks on future days
   const dayChips = document.querySelectorAll('.day-chip');
   dayChips.forEach(chip => {
     chip.addEventListener('click', () => {
+      if (chip.classList.contains('disabled-future') || chip.disabled) {
+        return;
+      }
+      const targetDay = chip.dataset.day || 'mon';
+      if (targetDay !== 'all') {
+        const targetIdx = dayKeys.indexOf(targetDay);
+        const todayIdx = getCurrentWeekDayIndex();
+        if (weekOffset === 0 && targetIdx > todayIdx) {
+          return;
+        }
+      }
       dayChips.forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
-      currentDiaryDay = chip.dataset.day || 'mon';
+      currentDiaryDay = targetDay;
       renderWeeklyMealsUI();
     });
   });
@@ -5180,7 +5072,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const prevWeekBtn = document.getElementById('prevWeekBtn');
   const nextWeekBtn = document.getElementById('nextWeekBtn');
   const weekRangeLabel = document.getElementById('weekRangeLabel');
-  let weekOffset = 0;
 
   function updateWeekLabel() {
     if (!weekRangeLabel) return;
@@ -5199,14 +5090,15 @@ document.addEventListener('DOMContentLoaded', () => {
     prevWeekBtn.addEventListener('click', () => {
       weekOffset--;
       updateWeekLabel();
-      showToast(`Showing ${weekRangeLabel.textContent}`);
+      fetchWeeklyDiaryFromBackend();
     });
   }
   if (nextWeekBtn) {
     nextWeekBtn.addEventListener('click', () => {
+      if (weekOffset >= 0) return; // Prevent navigating into future weeks
       weekOffset++;
       updateWeekLabel();
-      showToast(`Showing ${weekRangeLabel.textContent}`);
+      fetchWeeklyDiaryFromBackend();
     });
   }
 
@@ -5231,9 +5123,24 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentCapturedPhotoData = null;
 
   window.openAddMealPhotoModalForDay = function(dayKey) {
+    const todayIdx = getCurrentWeekDayIndex();
+
     if (diaryDaySelect) {
-      diaryDaySelect.value = (dayKey && dayKey !== 'all') ? dayKey : 'mon';
+      // Disable future day options in select dropdown
+      Array.from(diaryDaySelect.options).forEach((opt, idx) => {
+        const isFuture = (weekOffset === 0 && idx > todayIdx) || (weekOffset > 0);
+        opt.disabled = isFuture;
+        opt.textContent = isFuture ? `${dayNamesMap[opt.value]} (Future)` : dayNamesMap[opt.value];
+      });
+
+      let chosenDay = (dayKey && dayKey !== 'all') ? dayKey : dayKeys[todayIdx];
+      const chosenIdx = dayKeys.indexOf(chosenDay);
+      if (weekOffset === 0 && chosenIdx > todayIdx) {
+        chosenDay = dayKeys[todayIdx];
+      }
+      diaryDaySelect.value = chosenDay;
     }
+
     if (diaryTimeInput) {
       const now = new Date();
       let hours = now.getHours();
@@ -5303,7 +5210,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (diaryForm) {
     diaryForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const targetDay = (diaryDaySelect ? diaryDaySelect.value : 'mon') || 'mon';
+      const targetDay = (diaryDaySelect ? diaryDaySelect.value : dayKeys[getCurrentWeekDayIndex()]) || 'mon';
       const title = (diaryNameInput ? diaryNameInput.value.trim() : '') || 'Meal Photo';
       const mealSlot = (diaryMealSlotSelect ? diaryMealSlotSelect.value : 'Lunch') || 'Lunch';
       const calories = parseInt(diaryCalInput ? diaryCalInput.value : '0', 10) || 0;
@@ -5314,14 +5221,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const photoSrc = currentCapturedPhotoData || getFoodPlaceholderSvg(title);
 
       const newMeal = {
-        id: `meal_${Date.now()}`,
+        id: `meal_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         title,
         mealSlot,
         time,
         calories,
         isCheat,
         img: photoSrc,
-        notes
+        notes,
+        createdAt: Date.now()
       };
 
       if (!weeklyDiaryData[targetDay]) weeklyDiaryData[targetDay] = [];
@@ -5329,6 +5237,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       saveWeeklyDiaryData();
       renderWeeklyMealsUI();
+      addWeeklyMealToBackend(newMeal, targetDay);
 
       if (addMealModal) addMealModal.classList.remove('show');
 
@@ -5337,8 +5246,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Initial render of Weekly Food Diary UI
+  // Initial render & sync from backend
+  updateWeekLabel();
   renderWeeklyMealsUI();
+  fetchWeeklyDiaryFromBackend();
 
   // Expose FitTrackApp API globally for testing and automation
   window.FitTrackApp = {

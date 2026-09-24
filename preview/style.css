@@ -3843,13 +3843,18 @@ input:checked + .switch-slider:before {
   opacity: 1;
 }
 
-.day-chip .day-count.alert-count {
-  color: #EF4444;
-  font-weight: 800;
+.day-chip.disabled-future {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  background: var(--surface-secondary, #F3F4F6) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+  box-shadow: none !important;
 }
 
-.day-chip.active .day-count.alert-count {
-  color: #FCA5A5;
+.day-chip.disabled-future .day-name,
+.day-chip.disabled-future .day-count {
+  color: var(--text-muted, #9CA3AF) !important;
 }
 
 .day-chip.all-week-chip {

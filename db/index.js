@@ -7,6 +7,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const FAVORITES_FILE = path.join(DATA_DIR, 'favorites.json');
 const DAILY_LOGS_FILE = path.join(DATA_DIR, 'daily_logs.json');
+const WEEKLY_MEALS_FILE = path.join(DATA_DIR, 'weekly_meals.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -79,6 +80,7 @@ async function init() {
   if (!fs.existsSync(DAILY_LOGS_FILE)) writeJson(DAILY_LOGS_FILE, []);
   if (!fs.existsSync(FAVORITES_FILE)) writeJson(FAVORITES_FILE, {});
   if (!fs.existsSync(USERS_FILE)) writeJson(USERS_FILE, []);
+  if (!fs.existsSync(WEEKLY_MEALS_FILE)) writeJson(WEEKLY_MEALS_FILE, []);
 
   return true;
 }
@@ -483,6 +485,137 @@ async function deleteFavorite(userId, favId) {
   }
 }
 
+// ==================== WEEKLY MEALS / FOOD DIARY API ====================
+
+function formatWeeklyMealRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userEmail: row.user_email,
+    weekId: row.week_id,
+    day: row.day,
+    title: row.title,
+    mealSlot: row.meal_slot,
+    time: row.time,
+    calories: parseInt(row.calories, 10) || 0,
+    isCheat: Boolean(row.is_cheat),
+    notes: row.notes || '',
+    img: row.img || '',
+    createdAt: Number(row.created_at) || Date.now()
+  };
+}
+
+async function getWeeklyMeals(userEmail, weekId) {
+  if (!userEmail) return [];
+  const normalizedEmail = userEmail.toLowerCase().trim();
+
+  if (isPostgres) {
+    const query = `
+      SELECT * FROM weekly_meals 
+      WHERE LOWER(user_email) = $1 AND week_id = $2 
+      ORDER BY created_at ASC;
+    `;
+    const res = await pgPool.query(query, [normalizedEmail, weekId]);
+    return res.rows.map(formatWeeklyMealRow);
+  } else {
+    const allMeals = readJson(WEEKLY_MEALS_FILE, []);
+    return allMeals.filter(m => (m.userEmail || '').toLowerCase().trim() === normalizedEmail && m.weekId === weekId);
+  }
+}
+
+async function addWeeklyMeal(mealData) {
+  if (!mealData || !mealData.userEmail) throw new Error('userEmail is required to add weekly meal');
+
+  const newMeal = {
+    id: mealData.id || ('meal_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)),
+    userEmail: (mealData.userEmail || '').toLowerCase().trim(),
+    weekId: mealData.weekId || 'current',
+    day: (mealData.day || 'mon').toLowerCase().trim(),
+    title: mealData.title || 'Meal Photo',
+    mealSlot: mealData.mealSlot || 'Lunch',
+    time: mealData.time || '',
+    calories: parseInt(mealData.calories, 10) || 0,
+    isCheat: Boolean(mealData.isCheat),
+    notes: mealData.notes || '',
+    img: mealData.img || '',
+    createdAt: Number(mealData.createdAt) || Date.now()
+  };
+
+  if (isPostgres) {
+    const query = `
+      INSERT INTO weekly_meals (id, user_email, week_id, day, title, meal_slot, time, calories, is_cheat, notes, img, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *;
+    `;
+    const values = [
+      newMeal.id,
+      newMeal.userEmail,
+      newMeal.weekId,
+      newMeal.day,
+      newMeal.title,
+      newMeal.mealSlot,
+      newMeal.time,
+      newMeal.calories,
+      newMeal.isCheat,
+      newMeal.notes,
+      newMeal.img,
+      newMeal.createdAt
+    ];
+    const res = await pgPool.query(query, values);
+    return formatWeeklyMealRow(res.rows[0]);
+  } else {
+    const allMeals = readJson(WEEKLY_MEALS_FILE, []);
+    allMeals.push(newMeal);
+    writeJson(WEEKLY_MEALS_FILE, allMeals);
+    return newMeal;
+  }
+}
+
+async function deleteWeeklyMeal(id, userEmail) {
+  if (!id || !userEmail) return false;
+  const normalizedEmail = userEmail.toLowerCase().trim();
+
+  if (isPostgres) {
+    const res = await pgPool.query('DELETE FROM weekly_meals WHERE id = $1 AND LOWER(user_email) = $2', [id, normalizedEmail]);
+    return res.rowCount > 0;
+  } else {
+    const allMeals = readJson(WEEKLY_MEALS_FILE, []);
+    const initialLen = allMeals.length;
+    const filtered = allMeals.filter(m => !(m.id === id && (m.userEmail || '').toLowerCase().trim() === normalizedEmail));
+    if (filtered.length !== initialLen) {
+      writeJson(WEEKLY_MEALS_FILE, filtered);
+      return true;
+    }
+    return false;
+  }
+}
+
+async function toggleWeeklyMealCheat(id, userEmail, isCheat) {
+  if (!id || !userEmail) return null;
+  const normalizedEmail = userEmail.toLowerCase().trim();
+  const cheatBool = Boolean(isCheat);
+
+  if (isPostgres) {
+    const query = `
+      UPDATE weekly_meals 
+      SET is_cheat = $1 
+      WHERE id = $2 AND LOWER(user_email) = $3 
+      RETURNING *;
+    `;
+    const res = await pgPool.query(query, [cheatBool, id, normalizedEmail]);
+    return res.rows.length > 0 ? formatWeeklyMealRow(res.rows[0]) : null;
+  } else {
+    const allMeals = readJson(WEEKLY_MEALS_FILE, []);
+    const meal = allMeals.find(m => m.id === id && (m.userEmail || '').toLowerCase().trim() === normalizedEmail);
+    if (meal) {
+      meal.isCheat = cheatBool;
+      writeJson(WEEKLY_MEALS_FILE, allMeals);
+      return meal;
+    }
+    return null;
+  }
+}
+
 module.exports = {
   init,
   getUserByEmail,
@@ -497,5 +630,9 @@ module.exports = {
   getFavorites,
   addFavorite,
   deleteFavorite,
+  getWeeklyMeals,
+  addWeeklyMeal,
+  deleteWeeklyMeal,
+  toggleWeeklyMealCheat,
   isPostgres: () => isPostgres
 };
