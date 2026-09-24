@@ -572,16 +572,29 @@ async function addWeeklyMeal(mealData) {
 }
 
 async function deleteWeeklyMeal(id, userEmail) {
-  if (!id || !userEmail) return false;
-  const normalizedEmail = userEmail.toLowerCase().trim();
+  if (!id) return false;
+  const normalizedEmail = (userEmail || '').toLowerCase().trim();
 
   if (isPostgres) {
-    const res = await pgPool.query('DELETE FROM weekly_meals WHERE id = $1 AND LOWER(user_email) = $2', [id, normalizedEmail]);
+    let res;
+    if (normalizedEmail) {
+      res = await pgPool.query(
+        'DELETE FROM weekly_meals WHERE id = $1 AND (LOWER(user_email) = $2 OR user_email = $3)',
+        [id, normalizedEmail, 'guest@fittrack.local']
+      );
+    } else {
+      res = await pgPool.query('DELETE FROM weekly_meals WHERE id = $1', [id]);
+    }
     return res.rowCount > 0;
   } else {
     const allMeals = readJson(WEEKLY_MEALS_FILE, []);
     const initialLen = allMeals.length;
-    const filtered = allMeals.filter(m => !(m.id === id && (m.userEmail || '').toLowerCase().trim() === normalizedEmail));
+    const filtered = allMeals.filter(m => {
+      if (m.id !== id) return true;
+      if (!normalizedEmail) return false;
+      const mEmail = (m.userEmail || '').toLowerCase().trim();
+      return !(mEmail === normalizedEmail || mEmail === 'guest@fittrack.local');
+    });
     if (filtered.length !== initialLen) {
       writeJson(WEEKLY_MEALS_FILE, filtered);
       return true;

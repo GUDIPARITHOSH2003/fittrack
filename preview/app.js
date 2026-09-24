@@ -4729,7 +4729,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dietScore = totalMeals > 0 ? Math.round((cleanMeals / totalMeals) * 100) : 100;
     const trackedDaysCount = days.filter(d => (weeklyDiaryData[d] || []).length > 0).length;
 
-    // Update KPI Scorecard Elements
+    // Update KPI Scorecard Elements in header banner
     const statTotalEl = document.getElementById('statWeeklyTotal');
     const statCleanEl = document.getElementById('statWeeklyClean');
     const statCheatEl = document.getElementById('statWeeklyCheat');
@@ -4738,6 +4738,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const progCleanEl = document.getElementById('weeklyProgressClean');
     const progCheatEl = document.getElementById('weeklyProgressCheat');
     const nutritionWeeklyCheatTag = document.getElementById('nutritionWeeklyCheatTag');
+    const weeklyDiaryDateChip = document.getElementById('weeklyDiaryDateChip');
 
     if (statTotalEl) statTotalEl.textContent = totalMeals;
     if (statCleanEl) statCleanEl.textContent = cleanMeals;
@@ -4758,18 +4759,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (progCleanEl) progCleanEl.style.width = `${dietScore}%`;
     if (progCheatEl) progCheatEl.style.width = `${100 - dietScore}%`;
 
+    // Header Date Chip at very top
+    if (weeklyDiaryDateChip) {
+      weeklyDiaryDateChip.textContent = `THIS WEEK • ${totalMeals} PHOTO${totalMeals === 1 ? '' : 'S'} LOGGED`;
+    }
+
+    // Nutrition Tab Header Card Tag
     if (nutritionWeeklyCheatTag) {
-      nutritionWeeklyCheatTag.textContent = `${cheatMeals} Cheat Meal${cheatMeals === 1 ? '' : 's'} Tracked`;
+      if (totalMeals === 0) {
+        nutritionWeeklyCheatTag.textContent = '0 Photos Logged';
+      } else if (cheatMeals > 0) {
+        nutritionWeeklyCheatTag.textContent = `${totalMeals} Photo${totalMeals === 1 ? '' : 's'} Logged (${cheatMeals} Cheat)`;
+      } else {
+        nutritionWeeklyCheatTag.textContent = `${totalMeals} Photo${totalMeals === 1 ? '' : 's'} Logged (100% Clean)`;
+      }
     }
 
     // 2. Future day logic: disable unreached days in 7-day selector
     const todayIdx = getCurrentWeekDayIndex();
+    const todayKey = dayKeys[todayIdx];
 
     // If current selected day is in the future, fallback to today
     if (currentDiaryDay !== 'all') {
       const activeIdx = dayKeys.indexOf(currentDiaryDay);
       if (weekOffset === 0 && activeIdx > todayIdx) {
-        currentDiaryDay = dayKeys[todayIdx];
+        currentDiaryDay = todayKey;
       }
     }
 
@@ -4826,6 +4840,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    // Toggle "+ Add Meal Photo" button in day action bar:
+    // Only visible when viewing Today! Past days (e.g. Monday) are view-only.
+    const dayAddBtn = document.getElementById('dayAddMealPhotoBtn');
+    if (dayAddBtn) {
+      dayAddBtn.style.display = (currentDiaryDay === todayKey && weekOffset === 0) ? 'inline-flex' : 'none';
+    }
+
     // 3. Render Meals Grid
     const mealsGrid = document.getElementById('weeklyMealsGrid');
     const headingEl = document.getElementById('activeDayHeading');
@@ -4836,7 +4857,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (currentDiaryDay === 'all') {
       if (headingEl) headingEl.textContent = "Full Week Visual Mosaic";
-      if (subEl) subEl.textContent = `All ${totalMeals} meals logged Monday – Sunday`;
+      if (subEl) subEl.textContent = `All ${totalMeals} photo${totalMeals === 1 ? '' : 's'} logged Monday – Sunday`;
 
       // Render day-by-day sections (only through today for current week)
       days.forEach((d, idx) => {
@@ -4854,7 +4875,7 @@ document.addEventListener('DOMContentLoaded', () => {
         groupDiv.innerHTML = `
           <div class="recap-day-header">
             <span class="recap-day-title">${dayName.toUpperCase()}</span>
-            <span class="recap-day-summary">${dayMeals.length} photos${cheatText}</span>
+            <span class="recap-day-summary">${dayMeals.length} photo${dayMeals.length === 1 ? '' : 's'}${cheatText}</span>
           </div>
           <div class="day-group-meals" style="display: flex; flex-direction: column; gap: 10px;"></div>
         `;
@@ -4876,7 +4897,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div style="font-size: 38px; margin-bottom: 8px;">📷</div>
             <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">No Meal Photos Logged This Week</h4>
             <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">Snap a photo of your breakfast, lunch, or dinner to start your visual accountability log!</p>
-            <button class="pill-btn primary" onclick="openAddMealPhotoModalForDay('${dayKeys[todayIdx]}')" style="padding: 9px 18px; font-size: 12px; font-weight: 700; border-radius: 20px;">
+            <button class="pill-btn primary" onclick="openAddMealPhotoModalForDay('${todayKey}')" style="padding: 9px 18px; font-size: 12px; font-weight: 700; border-radius: 20px;">
               📸 + Add Today's First Meal
             </button>
           </div>
@@ -4886,29 +4907,51 @@ document.addEventListener('DOMContentLoaded', () => {
       const activeMeals = weeklyDiaryData[currentDiaryDay] || [];
       const dayName = dayNamesMap[currentDiaryDay];
       const cheatCount = activeMeals.filter(m => m.isCheat).length;
+      const cleanCount = activeMeals.length - cheatCount;
 
-      if (headingEl) headingEl.textContent = `${dayName}'s Meals`;
+      if (headingEl) {
+        headingEl.textContent = (currentDiaryDay === todayKey && weekOffset === 0)
+          ? `Today's Meals (${dayName})`
+          : `${dayName}'s Meals`;
+      }
+
       if (subEl) {
         if (activeMeals.length === 0) {
-          subEl.textContent = 'No photos logged yet today';
+          subEl.textContent = (currentDiaryDay === todayKey && weekOffset === 0)
+            ? 'No photos logged yet today • Tap + to add'
+            : `No photos logged for ${dayName} (Past Day)`;
         } else if (cheatCount > 0) {
-          subEl.textContent = `${activeMeals.length} photos logged • ${cheatCount} Cheat Meal${cheatCount === 1 ? '' : 's'}`;
+          subEl.textContent = `${activeMeals.length} photo${activeMeals.length === 1 ? '' : 's'} logged • ${cheatCount} Cheat Meal${cheatCount === 1 ? '' : 's'}`;
         } else {
-          subEl.textContent = `${activeMeals.length} photos logged • 100% clean diet`;
+          subEl.textContent = `${activeMeals.length} photo${activeMeals.length === 1 ? '' : 's'} logged • 100% clean diet`;
         }
       }
 
       if (activeMeals.length === 0) {
-        mealsGrid.innerHTML = `
-          <div class="card" style="text-align: center; padding: 32px 16px; border-radius: 20px;">
-            <div style="font-size: 38px; margin-bottom: 8px;">📷</div>
-            <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">No Meals Logged for ${dayName}</h4>
-            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">Take a quick photo of your breakfast, lunch, or dinner to stay accountable!</p>
-            <button class="pill-btn primary" onclick="openAddMealPhotoModalForDay('${currentDiaryDay}')" style="padding: 9px 18px; font-size: 12px; font-weight: 700; border-radius: 20px;">
-              📸 + Add Meal Photo
-            </button>
-          </div>
-        `;
+        if (currentDiaryDay === todayKey && weekOffset === 0) {
+          mealsGrid.innerHTML = `
+            <div class="card" style="text-align: center; padding: 32px 16px; border-radius: 20px;">
+              <div style="font-size: 38px; margin-bottom: 8px;">📷</div>
+              <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">No Meals Logged for Today (${dayName})</h4>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">Take a quick photo of your breakfast, lunch, or dinner to stay accountable!</p>
+              <button class="pill-btn primary" onclick="openAddMealPhotoModalForDay('${todayKey}')" style="padding: 9px 18px; font-size: 12px; font-weight: 700; border-radius: 20px;">
+                📸 + Add Today's Meal Photo
+              </button>
+            </div>
+          `;
+        } else {
+          // Past days: view-only notification with jump button to Today
+          mealsGrid.innerHTML = `
+            <div class="card" style="text-align: center; padding: 32px 16px; border-radius: 20px;">
+              <div style="font-size: 38px; margin-bottom: 8px;">📅</div>
+              <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">No Meals Logged for ${dayName}</h4>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">${dayName} has passed. New meal photos can only be added for Today (${dayNamesMap[todayKey]}).</p>
+              <button class="pill-btn primary" onclick="switchToTodayAndAdd()" style="padding: 9px 18px; font-size: 12px; font-weight: 700; border-radius: 20px;">
+                📸 + Add Meal Photo for Today (${dayNamesMap[todayKey]})
+              </button>
+            </div>
+          `;
+        }
       } else {
         activeMeals.forEach(meal => {
           mealsGrid.appendChild(createMealPhotoCard(meal, currentDiaryDay));
@@ -4916,6 +4959,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   }
+
+  window.switchToTodayAndAdd = function() {
+    const todayKey = dayKeys[getCurrentWeekDayIndex()];
+    currentDiaryDay = todayKey;
+    weekOffset = 0;
+    updateWeekLabel();
+    renderWeeklyMealsUI();
+    window.openAddMealPhotoModalForDay(todayKey);
+  };
 
   function createMealPhotoCard(meal, dayKey) {
     const card = document.createElement('div');
@@ -4979,16 +5031,25 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Delete photo button
+    // Delete photo button: robust search across all days ensures clean deletion & instant header update
     const deleteBtn = card.querySelector('.delete-btn');
     if (deleteBtn) {
       deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const list = weeklyDiaryData[dayKey] || [];
-        const idx = list.findIndex(m => m.id === meal.id);
-        if (idx !== -1) {
-          const removedTitle = meal.title;
-          list.splice(idx, 1);
+        const removedTitle = meal.title || 'Meal';
+        let deleted = false;
+        const allDayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+        for (const d of allDayKeys) {
+          if (Array.isArray(weeklyDiaryData[d])) {
+            const idx = weeklyDiaryData[d].findIndex(m => m.id === meal.id);
+            if (idx !== -1) {
+              weeklyDiaryData[d].splice(idx, 1);
+              deleted = true;
+              break;
+            }
+          }
+        }
+        if (deleted) {
           saveWeeklyDiaryData();
           renderWeeklyMealsUI();
           deleteWeeklyMealFromBackend(meal.id);
@@ -5046,7 +5107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 7-Day Filter Chips Row Event Listener: strictly ignore clicks on future days
+  // 7-Day Filter Chips Row Event Listener: allows viewing past days and today; strictly ignores future days
   const dayChips = document.querySelectorAll('.day-chip');
   dayChips.forEach(chip => {
     chip.addEventListener('click', () => {
@@ -5102,7 +5163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Add Meal Photo Modal Controls
+  // Add Meal Photo Modal Controls (Strictly locked to Today only!)
   const addMealModal = document.getElementById('addMealPhotoModalBackdrop');
   const closeAddMealModalBtn = document.getElementById('closeAddMealPhotoModal');
   const headerAddBtn = document.getElementById('headerAddMealPhotoBtn');
@@ -5124,21 +5185,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.openAddMealPhotoModalForDay = function(dayKey) {
     const todayIdx = getCurrentWeekDayIndex();
+    const todayKey = dayKeys[todayIdx];
 
+    // Lock Day selector strictly to Today
     if (diaryDaySelect) {
-      // Disable future day options in select dropdown
       Array.from(diaryDaySelect.options).forEach((opt, idx) => {
-        const isFuture = (weekOffset === 0 && idx > todayIdx) || (weekOffset > 0);
-        opt.disabled = isFuture;
-        opt.textContent = isFuture ? `${dayNamesMap[opt.value]} (Future)` : dayNamesMap[opt.value];
+        const isToday = (idx === todayIdx);
+        opt.disabled = !isToday;
+        opt.textContent = isToday ? `${dayNamesMap[opt.value]} (Today)` : dayNamesMap[opt.value];
       });
-
-      let chosenDay = (dayKey && dayKey !== 'all') ? dayKey : dayKeys[todayIdx];
-      const chosenIdx = dayKeys.indexOf(chosenDay);
-      if (weekOffset === 0 && chosenIdx > todayIdx) {
-        chosenDay = dayKeys[todayIdx];
-      }
-      diaryDaySelect.value = chosenDay;
+      diaryDaySelect.value = todayKey;
+      diaryDaySelect.disabled = true;
     }
 
     if (diaryTimeInput) {
@@ -5164,16 +5221,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addMealModal) addMealModal.classList.add('show');
   };
 
+  // "+ Add Photo" in top header always targets Today
   if (headerAddBtn) {
     headerAddBtn.addEventListener('click', () => {
-      window.openAddMealPhotoModalForDay(currentDiaryDay);
+      const todayKey = dayKeys[getCurrentWeekDayIndex()];
+      currentDiaryDay = todayKey;
+      renderWeeklyMealsUI();
+      window.openAddMealPhotoModalForDay(todayKey);
     });
   }
+
+  // "+ Add Meal Photo" button in day action bar (only active on Today)
   if (dayAddBtn) {
     dayAddBtn.addEventListener('click', () => {
-      window.openAddMealPhotoModalForDay(currentDiaryDay);
+      const todayKey = dayKeys[getCurrentWeekDayIndex()];
+      currentDiaryDay = todayKey;
+      renderWeeklyMealsUI();
+      window.openAddMealPhotoModalForDay(todayKey);
     });
   }
+
   if (closeAddMealModalBtn && addMealModal) {
     closeAddMealModalBtn.addEventListener('click', () => addMealModal.classList.remove('show'));
     addMealModal.addEventListener('click', (e) => {
@@ -5206,11 +5273,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Handle Form Submission
+  // Handle Form Submission: ALWAYS saved to Today only!
   if (diaryForm) {
     diaryForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const targetDay = (diaryDaySelect ? diaryDaySelect.value : dayKeys[getCurrentWeekDayIndex()]) || 'mon';
+      const targetDay = dayKeys[getCurrentWeekDayIndex()]; // Strictly locked to Today
       const title = (diaryNameInput ? diaryNameInput.value.trim() : '') || 'Meal Photo';
       const mealSlot = (diaryMealSlotSelect ? diaryMealSlotSelect.value : 'Lunch') || 'Lunch';
       const calories = parseInt(diaryCalInput ? diaryCalInput.value : '0', 10) || 0;
@@ -5242,7 +5309,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (addMealModal) addMealModal.classList.remove('show');
 
       const cheatMsg = isCheat ? ' (Logged as Cheat Meal 🍕)' : '';
-      showToast(`📸 Added "${title}" to ${dayNamesMap[targetDay]}${cheatMsg}!`);
+      showToast(`📸 Added "${title}" to Today (${dayNamesMap[targetDay]})${cheatMsg}!`);
     });
   }
 

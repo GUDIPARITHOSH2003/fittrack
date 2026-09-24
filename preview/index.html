@@ -468,7 +468,7 @@
               <div style="flex: 1; padding-right: 12px;">
                 <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
                   <span style="font-size: 9.5px; font-weight: 800; background: rgba(212,241,98,0.22); color: #D4F162; padding: 2px 7px; border-radius: 6px; letter-spacing: 0.5px;">📸 WEEKLY PHOTO LOG</span>
-                  <span style="font-size: 11px; color: #9CA3AF;" id="nutritionWeeklyCheatTag">0 Cheat Meals Tracked</span>
+                  <span style="font-size: 11px; color: #9CA3AF;" id="nutritionWeeklyCheatTag">0 Photos Logged</span>
                 </div>
                 <h4 style="font-size: 14px; font-weight: 700; color: #FFFFFF; margin: 0 0 2px 0;">Weekly Food &amp; Cheat Diary</h4>
                 <p style="font-size: 11px; color: #D1D5DB; margin: 0;">See all photos eaten Mon–Sun &amp; hold yourself accountable!</p>
@@ -1072,12 +1072,15 @@
             <!-- Day & Meal Slot Selector Row -->
             <div style="display: flex; gap: 10px;">
               <div style="flex: 1;">
-                <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; display: block;">Day of Week</label>
-                <select id="diaryDaySelect" style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--border-subtle); background: var(--surface-secondary); font-weight: 600;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>Logging For</span>
+                  <span style="font-size: 10px; color: #059669; font-weight: 700;">🔒 Today Only</span>
+                </label>
+                <select id="diaryDaySelect" disabled style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--border-subtle); background: var(--surface-secondary); font-weight: 700; color: var(--text-primary); cursor: not-allowed; opacity: 0.95;">
                   <option value="mon">Monday</option>
                   <option value="tue">Tuesday</option>
                   <option value="wed">Wednesday</option>
-                  <option value="thu">Thursday</option>
+                  <option value="thu">Thursday (Today)</option>
                   <option value="fri">Friday</option>
                   <option value="sat">Saturday</option>
                   <option value="sun">Sunday</option>
