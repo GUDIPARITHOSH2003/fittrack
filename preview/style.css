@@ -4072,5 +4072,29 @@ input:checked + .switch-slider:before {
   border: 1px solid var(--border-subtle);
 }
 
+/* Diary Photo Lightbox Backdrop */
+.diary-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.diary-lightbox-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-backdrop {
+  display: none !important;
+}
+
 
 
