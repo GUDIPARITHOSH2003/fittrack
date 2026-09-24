@@ -763,7 +763,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof updateMacroRings === 'function') updateMacroRings();
     } else if (targetTabId === 'tabWorkout') {
       if (typeof updateWorkoutHeroUI === 'function') updateWorkoutHeroUI();
+    } else if (targetTabId === 'tabWeeklyMeals') {
+      if (typeof renderWeeklyMealsUI === 'function') renderWeeklyMealsUI();
     }
+  }
+
+  const jumpToWeeklyMealsCard = document.getElementById('jumpToWeeklyMealsCard');
+  if (jumpToWeeklyMealsCard) {
+    jumpToWeeklyMealsCard.addEventListener('click', () => switchTab('tabWeeklyMeals'));
   }
 
   navItems.forEach(item => {
@@ -4534,6 +4541,804 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // ===================================================================
+  // WEEKLY VISUAL FOOD DIARY & CHEAT ACCOUNTABILITY CONTROLLER
+  // ===================================================================
+
+  // High quality fallback SVG food illustration if offline or failed load
+  function getFoodPlaceholderSvg(dishName) {
+    const safeTitle = (dishName || 'Meal').replace(/</g, '').replace(/>/g, '');
+    return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="360" viewBox="0 0 600 360"><rect width="600" height="360" fill="%232D3748"/><circle cx="300" cy="180" r="110" fill="%234A5568"/><circle cx="300" cy="180" r="85" fill="%23E2E8F0"/><text x="300" y="175" fill="%232D3748" font-size="48" text-anchor="middle" font-family="sans-serif">🍱</text><text x="300" y="215" fill="%231A202C" font-size="18" font-weight="bold" text-anchor="middle" font-family="sans-serif">${encodeURIComponent(safeTitle)}</text></svg>`;
+  }
+
+  // Realistic default seed data showing 5 meals on Monday, clean meals, and cheat accountability
+  const defaultWeeklyDiaryData = {
+    mon: [
+      {
+        id: "m_mon_1",
+        title: "Rolled Oatmeal & Mixed Berries",
+        mealSlot: "Breakfast",
+        time: "8:00 AM",
+        calories: 380,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?w=600",
+        notes: "Fuel for morning workout"
+      },
+      {
+        id: "m_mon_2",
+        title: "Grilled Chicken & Quinoa Salad",
+        mealSlot: "Lunch",
+        time: "1:00 PM",
+        calories: 520,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600",
+        notes: "High protein meal prep"
+      },
+      {
+        id: "m_mon_3",
+        title: "Greek Yogurt & Raw Almonds",
+        mealSlot: "Snack",
+        time: "4:15 PM",
+        calories: 220,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=600",
+        notes: "Clean afternoon snack"
+      },
+      {
+        id: "m_mon_4",
+        title: "Herb Crusted Salmon & Sweet Potato",
+        mealSlot: "Dinner",
+        time: "7:45 PM",
+        calories: 580,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=600",
+        notes: "Rich in omega 3 & clean carbs"
+      },
+      {
+        id: "m_mon_5",
+        title: "Whey Isolate Protein Shake",
+        mealSlot: "Late Night",
+        time: "10:00 PM",
+        calories: 140,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1579722820308-d74e571900a9?w=600",
+        notes: "Pre-bed recovery shake"
+      }
+    ],
+    tue: [
+      {
+        id: "m_tue_1",
+        title: "Poached Eggs on Sourdough",
+        mealSlot: "Breakfast",
+        time: "8:30 AM",
+        calories: 390,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=600",
+        notes: "Solid protein foundation"
+      },
+      {
+        id: "m_tue_2",
+        title: "Roasted Turkey Breast Wrap",
+        mealSlot: "Lunch",
+        time: "1:15 PM",
+        calories: 460,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=600",
+        notes: "Whole wheat wrap with spinach"
+      },
+      {
+        id: "m_tue_3",
+        title: "Green Apple & Peanut Butter",
+        mealSlot: "Snack",
+        time: "4:45 PM",
+        calories: 210,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=600",
+        notes: "Fiber & healthy fats"
+      },
+      {
+        id: "m_tue_4",
+        title: "Lean Beef Stir-Fry with Broccoli",
+        mealSlot: "Dinner",
+        time: "8:00 PM",
+        calories: 550,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1544025162-d76694265947?w=600",
+        notes: "Low oil, lots of greens"
+      }
+    ],
+    wed: [
+      {
+        id: "m_wed_1",
+        title: "Berry Banana Protein Smoothie",
+        mealSlot: "Breakfast",
+        time: "8:15 AM",
+        calories: 340,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1553530666-ba11a7da3888?w=600",
+        notes: "Quick blend before commute"
+      },
+      {
+        id: "m_wed_2",
+        title: "Chicken Breast & Brown Rice",
+        mealSlot: "Lunch",
+        time: "1:00 PM",
+        calories: 490,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600",
+        notes: "Standard clean prep"
+      },
+      {
+        id: "m_wed_3",
+        title: "Handful of Raw Walnuts",
+        mealSlot: "Snack",
+        time: "4:30 PM",
+        calories: 190,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1508746829417-e6f548d8d6ed?w=600",
+        notes: "Brain food"
+      },
+      {
+        id: "m_wed_4",
+        title: "Pepperoni Pizza & Garlic Knots",
+        mealSlot: "Dinner",
+        time: "8:30 PM",
+        calories: 980,
+        isCheat: true,
+        img: "https://images.unsplash.com/photo-1534308983496-4fabb1a015ee?w=600",
+        notes: "Late night takeout after overtime — review photo to avoid repeating!"
+      }
+    ],
+    thu: [
+      {
+        id: "m_thu_1",
+        title: "Chia Seed Pudding with Mango",
+        mealSlot: "Breakfast",
+        time: "8:00 AM",
+        calories: 320,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=600",
+        notes: "Gut health reset"
+      },
+      {
+        id: "m_thu_2",
+        title: "Tuna Avocado Salad Bowl",
+        mealSlot: "Lunch",
+        time: "1:30 PM",
+        calories: 440,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600",
+        notes: "Clean recovery meal"
+      },
+      {
+        id: "m_thu_3",
+        title: "Organic Rice Cakes with Hummus",
+        mealSlot: "Snack",
+        time: "4:00 PM",
+        calories: 160,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=600",
+        notes: "Light pre-workout carb"
+      },
+      {
+        id: "m_thu_4",
+        title: "Grilled Herb Chicken Breast & Greens",
+        mealSlot: "Dinner",
+        time: "7:30 PM",
+        calories: 480,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600",
+        notes: "Back 100% on track"
+      }
+    ],
+    fri: [
+      {
+        id: "m_fri_1",
+        title: "Egg White Spinach Omelette",
+        mealSlot: "Breakfast",
+        time: "8:15 AM",
+        calories: 310,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=600",
+        notes: "High volume greens"
+      },
+      {
+        id: "m_fri_2",
+        title: "Quinoa Edamame Protein Bowl",
+        mealSlot: "Lunch",
+        time: "1:00 PM",
+        calories: 460,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600",
+        notes: "Plant fiber power"
+      },
+      {
+        id: "m_fri_3",
+        title: "Dark Chocolate Protein Bar",
+        mealSlot: "Snack",
+        time: "4:30 PM",
+        calories: 210,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1579722820308-d74e571900a9?w=600",
+        notes: "Sweet craving satisfied cleanly"
+      },
+      {
+        id: "m_fri_4",
+        title: "Double Bacon Cheeseburger & Fries",
+        mealSlot: "Dinner",
+        time: "9:00 PM",
+        calories: 1120,
+        isCheat: true,
+        img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600",
+        notes: "Friday dinner with friends — acknowledged cheat, staying accountable!"
+      }
+    ],
+    sat: [
+      {
+        id: "m_sat_1",
+        title: "Protein Oat Pancakes & Strawberries",
+        mealSlot: "Breakfast",
+        time: "9:30 AM",
+        calories: 450,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1528207776546-365bb710ee93?w=600",
+        notes: "Weekend breakfast"
+      },
+      {
+        id: "m_sat_2",
+        title: "Grilled Chicken Caesar Salad",
+        mealSlot: "Lunch",
+        time: "2:00 PM",
+        calories: 420,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600",
+        notes: "Light dressing"
+      },
+      {
+        id: "m_sat_3",
+        title: "Seared Ribeye Steak & Asparagus",
+        mealSlot: "Dinner",
+        time: "8:00 PM",
+        calories: 680,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1544025162-d76694265947?w=600",
+        notes: "Clean keto style dinner"
+      }
+    ],
+    sun: [
+      {
+        id: "m_sun_1",
+        title: "Avocado & Sunny-side Up Eggs",
+        mealSlot: "Breakfast",
+        time: "9:00 AM",
+        calories: 420,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=600",
+        notes: "Sunday morning fuel"
+      },
+      {
+        id: "m_sun_2",
+        title: "Roast Chicken & Steamed Greens",
+        mealSlot: "Lunch",
+        time: "2:30 PM",
+        calories: 520,
+        isCheat: false,
+        img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600",
+        notes: "Weekly meal planning session"
+      },
+      {
+        id: "m_sun_3",
+        title: "Warm Fudge Brownie & Ice Cream",
+        mealSlot: "Snack",
+        time: "6:00 PM",
+        calories: 640,
+        isCheat: true,
+        img: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600",
+        notes: "Sunday family dessert cheat — looking at photo reminds me to start fresh Monday!"
+      }
+    ]
+  };
+
+  let weeklyDiaryData = null;
+  try {
+    const savedDiary = localStorage.getItem('fittrack_weekly_diary_v1');
+    if (savedDiary) {
+      weeklyDiaryData = JSON.parse(savedDiary);
+    }
+  } catch (e) {
+    console.warn('[WeeklyDiary] Failed to parse localStorage diary data:', e);
+  }
+
+  if (!weeklyDiaryData || typeof weeklyDiaryData !== 'object' || !weeklyDiaryData.mon) {
+    weeklyDiaryData = JSON.parse(JSON.stringify(defaultWeeklyDiaryData));
+    localStorage.setItem('fittrack_weekly_diary_v1', JSON.stringify(weeklyDiaryData));
+  }
+
+  function saveWeeklyDiaryData() {
+    try {
+      localStorage.setItem('fittrack_weekly_diary_v1', JSON.stringify(weeklyDiaryData));
+    } catch (e) {
+      console.warn('[WeeklyDiary] localStorage save error:', e);
+    }
+  }
+
+  let currentDiaryDay = 'mon';
+
+  const dayNamesMap = {
+    mon: "Monday",
+    tue: "Tuesday",
+    wed: "Wednesday",
+    thu: "Thursday",
+    fri: "Friday",
+    sat: "Saturday",
+    sun: "Sunday"
+  };
+
+  function renderWeeklyMealsUI() {
+    // 1. Calculate overall weekly statistics
+    const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    let totalMeals = 0;
+    let cleanMeals = 0;
+    let cheatMeals = 0;
+    const cheatList = [];
+
+    days.forEach(d => {
+      const items = weeklyDiaryData[d] || [];
+      totalMeals += items.length;
+      items.forEach(item => {
+        if (item.isCheat) {
+          cheatMeals++;
+          cheatList.push({ day: dayNamesMap[d], title: item.title });
+        } else {
+          cleanMeals++;
+        }
+      });
+    });
+
+    const dietScore = totalMeals > 0 ? Math.round((cleanMeals / totalMeals) * 100) : 100;
+
+    // Update KPI Scorecard Elements
+    const statTotalEl = document.getElementById('statWeeklyTotal');
+    const statCleanEl = document.getElementById('statWeeklyClean');
+    const statCheatEl = document.getElementById('statWeeklyCheat');
+    const statDaysEl = document.getElementById('statWeeklyDays');
+    const scoreBadgeEl = document.getElementById('weeklyDietScoreBadge');
+    const progCleanEl = document.getElementById('weeklyProgressClean');
+    const progCheatEl = document.getElementById('weeklyProgressCheat');
+    const cheatCalloutEl = document.getElementById('weeklyCheatCallout');
+    const cheatCalloutText = document.getElementById('weeklyCheatCalloutText');
+    const nutritionWeeklyCheatTag = document.getElementById('nutritionWeeklyCheatTag');
+
+    if (statTotalEl) statTotalEl.textContent = totalMeals;
+    if (statCleanEl) statCleanEl.textContent = cleanMeals;
+    if (statCheatEl) statCheatEl.textContent = cheatMeals;
+    if (statDaysEl) statDaysEl.textContent = "7/7";
+
+    if (scoreBadgeEl) {
+      scoreBadgeEl.textContent = `${dietScore}% Clean`;
+      if (dietScore >= 80) {
+        scoreBadgeEl.style.background = 'rgba(16, 185, 129, 0.12)';
+        scoreBadgeEl.style.color = '#059669';
+      } else {
+        scoreBadgeEl.style.background = 'rgba(239, 68, 68, 0.12)';
+        scoreBadgeEl.style.color = '#DC2626';
+      }
+    }
+
+    if (progCleanEl) progCleanEl.style.width = `${dietScore}%`;
+    if (progCheatEl) progCheatEl.style.width = `${100 - dietScore}%`;
+
+    if (cheatCalloutEl && cheatCalloutText) {
+      if (cheatMeals > 0) {
+        const topCheats = cheatList.slice(0, 3).map(c => `${c.title} on ${c.day}`).join(', ');
+        cheatCalloutText.innerHTML = `<strong>Cheat Meal Alert:</strong> ${cheatMeals} cheat meal(s) logged this week (${topCheats}). Looking at your actual photos keeps you accountable so you don't repeat them!`;
+        cheatCalloutEl.style.display = 'flex';
+      } else {
+        cheatCalloutText.innerHTML = `<strong>100% Clean Streak!</strong> Zero cheat meals logged this week. Incredible discipline!`;
+        cheatCalloutEl.style.background = 'rgba(16, 185, 129, 0.08)';
+        cheatCalloutEl.style.borderColor = 'rgba(16, 185, 129, 0.22)';
+        cheatCalloutEl.style.color = '#065F46';
+        cheatCalloutEl.style.display = 'flex';
+      }
+    }
+
+    if (nutritionWeeklyCheatTag) {
+      nutritionWeeklyCheatTag.textContent = `${cheatMeals} Cheat Meal${cheatMeals === 1 ? '' : 's'} Tracked`;
+    }
+
+    // 2. Update day badges in 7-day selector
+    days.forEach(d => {
+      const capKey = d.charAt(0).toUpperCase() + d.slice(1);
+      const badge = document.getElementById(`countBadge${capKey}`);
+      if (badge) {
+        const count = (weeklyDiaryData[d] || []).length;
+        badge.textContent = count;
+        const hasCheat = (weeklyDiaryData[d] || []).some(m => m.isCheat);
+        if (hasCheat) {
+          badge.classList.add('alert-count');
+        } else {
+          badge.classList.remove('alert-count');
+        }
+      }
+    });
+    const countBadgeAll = document.getElementById('countBadgeAll');
+    if (countBadgeAll) countBadgeAll.textContent = totalMeals;
+
+    // 3. Render Meals Grid
+    const mealsGrid = document.getElementById('weeklyMealsGrid');
+    const headingEl = document.getElementById('activeDayHeading');
+    const subEl = document.getElementById('activeDaySub');
+
+    if (!mealsGrid) return;
+    mealsGrid.innerHTML = '';
+
+    if (currentDiaryDay === 'all') {
+      if (headingEl) headingEl.textContent = "Full Week Visual Mosaic";
+      if (subEl) subEl.textContent = `All ${totalMeals} meals logged Monday – Sunday`;
+
+      // Render day-by-day sections
+      days.forEach(d => {
+        const dayMeals = weeklyDiaryData[d] || [];
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'recap-day-group';
+
+        const dayName = dayNamesMap[d];
+        const dayClean = dayMeals.filter(m => !m.isCheat).length;
+        const dayCheat = dayMeals.filter(m => m.isCheat).length;
+        const cheatText = dayCheat > 0 ? ` • <span style="color:#EF4444; font-weight:700;">${dayCheat} Cheat ⚠️</span>` : ' • Clean';
+
+        groupDiv.innerHTML = `
+          <div class="recap-day-header">
+            <span class="recap-day-title">${dayName.toUpperCase()}</span>
+            <span class="recap-day-summary">${dayMeals.length} photos${cheatText}</span>
+          </div>
+          <div class="day-group-meals" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        `;
+
+        const groupMealsContainer = groupDiv.querySelector('.day-group-meals');
+        if (dayMeals.length === 0) {
+          groupMealsContainer.innerHTML = `<div style="font-size: 11.5px; color: var(--text-muted); padding: 8px 4px;">No meal photos logged for ${dayName}.</div>`;
+        } else {
+          dayMeals.forEach(meal => {
+            groupMealsContainer.appendChild(createMealPhotoCard(meal, d));
+          });
+        }
+        mealsGrid.appendChild(groupDiv);
+      });
+    } else {
+      const activeMeals = weeklyDiaryData[currentDiaryDay] || [];
+      const dayName = dayNamesMap[currentDiaryDay];
+      const cheatCount = activeMeals.filter(m => m.isCheat).length;
+
+      if (headingEl) headingEl.textContent = `${dayName}'s Meals`;
+      if (subEl) {
+        if (cheatCount > 0) {
+          subEl.innerHTML = `${activeMeals.length} photos logged • <span style="color:#EF4444; font-weight:700;">${cheatCount} Cheat Meal${cheatCount === 1 ? '' : 's'} ⚠️</span>`;
+        } else {
+          subEl.textContent = `${activeMeals.length} photos logged • 100% clean diet`;
+        }
+      }
+
+      if (activeMeals.length === 0) {
+        mealsGrid.innerHTML = `
+          <div class="card" style="text-align: center; padding: 32px 16px; border-radius: 20px;">
+            <div style="font-size: 38px; margin-bottom: 8px;">📷</div>
+            <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">No Meals Logged for ${dayName}</h4>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">Take a quick photo of your breakfast, lunch, or dinner to stay accountable!</p>
+            <button class="pill-btn primary" onclick="openAddMealPhotoModalForDay('${currentDiaryDay}')" style="padding: 9px 18px; font-size: 12px; font-weight: 700; border-radius: 20px;">
+              📸 + Add Meal Photo
+            </button>
+          </div>
+        `;
+      } else {
+        activeMeals.forEach(meal => {
+          mealsGrid.appendChild(createMealPhotoCard(meal, currentDiaryDay));
+        });
+      }
+    }
+  }
+
+  function createMealPhotoCard(meal, dayKey) {
+    const card = document.createElement('div');
+    card.className = `meal-photo-card ${meal.isCheat ? 'cheat-meal' : ''}`;
+    card.dataset.mealId = meal.id;
+    card.dataset.day = dayKey;
+
+    const statusBadgeHtml = meal.isCheat
+      ? `<span class="meal-status-pill cheat">🍕 CHEAT MEAL ⚠️</span>`
+      : `<span class="meal-status-pill clean">🥗 Clean Meal</span>`;
+
+    const cheatNoteHtml = (meal.isCheat && meal.notes)
+      ? `<div class="meal-photo-cheat-note"><span>⚠️</span><span><strong>Accountability Note:</strong> ${escapeHtml(meal.notes)}</span></div>`
+      : (meal.notes ? `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; font-style: italic;">"${escapeHtml(meal.notes)}"</div>` : '');
+
+    const safeTitle = escapeHtml(meal.title || 'Meal');
+    const caloriesText = meal.calories ? `${meal.calories} kcal` : 'Calorie unestimated';
+
+    card.innerHTML = `
+      <div class="meal-photo-img-wrap" title="Tap to expand photo">
+        <img class="meal-photo-img" src="${meal.img}" alt="${safeTitle}" onerror="this.src='${getFoodPlaceholderSvg(meal.title)}'" loading="lazy">
+        ${statusBadgeHtml}
+        <span class="meal-slot-pill">${meal.mealSlot || 'Meal'}</span>
+      </div>
+      <div class="meal-photo-body">
+        <div class="meal-photo-header">
+          <h4 class="meal-photo-title">${safeTitle}</h4>
+          <span class="meal-photo-time">${meal.time || ''}</span>
+        </div>
+        <div class="meal-photo-macros">${caloriesText} • ${dayNamesMap[dayKey]}</div>
+        ${cheatNoteHtml}
+        <div class="meal-photo-footer">
+          <button type="button" class="meal-photo-action-btn toggle-cheat-btn" title="Toggle Cheat Status">
+            ${meal.isCheat ? 'Mark as Clean 🥗' : 'Mark as Cheat 🍕'}
+          </button>
+          <button type="button" class="meal-photo-action-btn delete-btn" title="Delete Photo">
+            Delete
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Click photo to open Lightbox
+    const imgWrap = card.querySelector('.meal-photo-img-wrap');
+    if (imgWrap) {
+      imgWrap.addEventListener('click', () => {
+        openDiaryLightbox(meal, dayKey);
+      });
+    }
+
+    // Toggle cheat status button
+    const toggleBtn = card.querySelector('.toggle-cheat-btn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        meal.isCheat = !meal.isCheat;
+        saveWeeklyDiaryData();
+        renderWeeklyMealsUI();
+        showToast(meal.isCheat ? '🍕 Marked as Cheat Meal' : '🥗 Marked as Clean Meal');
+      });
+    }
+
+    // Delete photo button
+    const deleteBtn = card.querySelector('.delete-btn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const list = weeklyDiaryData[dayKey] || [];
+        const idx = list.findIndex(m => m.id === meal.id);
+        if (idx !== -1) {
+          list.splice(idx, 1);
+          saveWeeklyDiaryData();
+          renderWeeklyMealsUI();
+          showToast(`🗑️ Removed "${meal.title}"`);
+        }
+      });
+    }
+
+    return card;
+  }
+
+  // Lightbox Modal Controls
+  const lightboxBackdrop = document.getElementById('diaryPhotoLightboxBackdrop');
+  const closeLightboxBtn = document.getElementById('closeLightboxBtn');
+  const lightboxImg = document.getElementById('lightboxImg');
+  const lightboxTag = document.getElementById('lightboxTag');
+  const lightboxTime = document.getElementById('lightboxTime');
+  const lightboxTitle = document.getElementById('lightboxTitle');
+  const lightboxCalories = document.getElementById('lightboxCalories');
+  const lightboxNotes = document.getElementById('lightboxNotes');
+
+  function openDiaryLightbox(meal, dayKey) {
+    if (!lightboxBackdrop) return;
+    if (lightboxImg) {
+      lightboxImg.src = meal.img;
+      lightboxImg.onerror = () => { lightboxImg.src = getFoodPlaceholderSvg(meal.title); };
+    }
+    if (lightboxTag) {
+      if (meal.isCheat) {
+        lightboxTag.textContent = '🍕 CHEAT MEAL ⚠️';
+        lightboxTag.style.background = 'rgba(239, 68, 68, 0.25)';
+        lightboxTag.style.color = '#EF4444';
+      } else {
+        lightboxTag.textContent = '🥗 Clean Meal';
+        lightboxTag.style.background = 'rgba(16, 185, 129, 0.25)';
+        lightboxTag.style.color = '#10B981';
+      }
+    }
+    if (lightboxTime) {
+      lightboxTime.textContent = `${meal.time || ''} • ${dayNamesMap[dayKey] || ''}`;
+    }
+    if (lightboxTitle) lightboxTitle.textContent = meal.title || 'Meal';
+    if (lightboxCalories) lightboxCalories.textContent = `${meal.calories || 0} kcal • ${meal.mealSlot || 'Meal'}`;
+    if (lightboxNotes) {
+      lightboxNotes.textContent = meal.notes ? `"${meal.notes}"` : '';
+      lightboxNotes.style.display = meal.notes ? 'block' : 'none';
+    }
+    lightboxBackdrop.classList.add('show');
+  }
+
+  if (closeLightboxBtn && lightboxBackdrop) {
+    closeLightboxBtn.addEventListener('click', () => lightboxBackdrop.classList.remove('show'));
+    lightboxBackdrop.addEventListener('click', (e) => {
+      if (e.target === lightboxBackdrop) lightboxBackdrop.classList.remove('show');
+    });
+  }
+
+  // 7-Day Filter Chips Row Event Listener
+  const dayChips = document.querySelectorAll('.day-chip');
+  dayChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      dayChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentDiaryDay = chip.dataset.day || 'mon';
+      renderWeeklyMealsUI();
+    });
+  });
+
+  // Week Switcher Buttons
+  const prevWeekBtn = document.getElementById('prevWeekBtn');
+  const nextWeekBtn = document.getElementById('nextWeekBtn');
+  const weekRangeLabel = document.getElementById('weekRangeLabel');
+  let weekOffset = 0;
+
+  function updateWeekLabel() {
+    if (!weekRangeLabel) return;
+    if (weekOffset === 0) {
+      weekRangeLabel.textContent = "Current Week (Mon – Sun)";
+    } else if (weekOffset === -1) {
+      weekRangeLabel.textContent = "Previous Week";
+    } else if (weekOffset === 1) {
+      weekRangeLabel.textContent = "Next Week";
+    } else {
+      weekRangeLabel.textContent = `${Math.abs(weekOffset)} Weeks ${weekOffset < 0 ? 'Ago' : 'Ahead'}`;
+    }
+  }
+
+  if (prevWeekBtn) {
+    prevWeekBtn.addEventListener('click', () => {
+      weekOffset--;
+      updateWeekLabel();
+      showToast(`Showing ${weekRangeLabel.textContent}`);
+    });
+  }
+  if (nextWeekBtn) {
+    nextWeekBtn.addEventListener('click', () => {
+      weekOffset++;
+      updateWeekLabel();
+      showToast(`Showing ${weekRangeLabel.textContent}`);
+    });
+  }
+
+  // Add Meal Photo Modal Controls
+  const addMealModal = document.getElementById('addMealPhotoModalBackdrop');
+  const closeAddMealModalBtn = document.getElementById('closeAddMealPhotoModal');
+  const headerAddBtn = document.getElementById('headerAddMealPhotoBtn');
+  const dayAddBtn = document.getElementById('dayAddMealPhotoBtn');
+  const diaryForm = document.getElementById('addMealPhotoForm');
+  const diaryDaySelect = document.getElementById('diaryDaySelect');
+  const diaryMealSlotSelect = document.getElementById('diaryMealSlotSelect');
+  const diaryFileInput = document.getElementById('diaryPhotoFileInput');
+  const diaryPreviewBox = document.getElementById('diaryPhotoPreviewBox');
+  const diaryPreviewImg = document.getElementById('diaryPreviewImg');
+  const diaryPlaceholder = document.getElementById('diaryPhotoPlaceholder');
+  const diaryNameInput = document.getElementById('diaryMealNameInput');
+  const diaryCalInput = document.getElementById('diaryMealCaloriesInput');
+  const diaryTimeInput = document.getElementById('diaryMealTimeInput');
+  const diaryCheatInput = document.getElementById('diaryIsCheatInput');
+  const diaryNotesInput = document.getElementById('diaryMealNotesInput');
+
+  let currentCapturedPhotoData = null;
+
+  window.openAddMealPhotoModalForDay = function(dayKey) {
+    if (diaryDaySelect) {
+      diaryDaySelect.value = (dayKey && dayKey !== 'all') ? dayKey : 'mon';
+    }
+    if (diaryTimeInput) {
+      const now = new Date();
+      let hours = now.getHours();
+      const mins = now.getMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      diaryTimeInput.value = `${hours}:${mins} ${ampm}`;
+    }
+    if (diaryNameInput) diaryNameInput.value = '';
+    if (diaryCalInput) diaryCalInput.value = '';
+    if (diaryCheatInput) diaryCheatInput.checked = false;
+    if (diaryNotesInput) diaryNotesInput.value = '';
+    currentCapturedPhotoData = null;
+
+    if (diaryPreviewImg) {
+      diaryPreviewImg.src = '';
+      diaryPreviewImg.style.display = 'none';
+    }
+    if (diaryPlaceholder) diaryPlaceholder.style.display = 'block';
+
+    if (addMealModal) addMealModal.classList.add('show');
+  };
+
+  if (headerAddBtn) {
+    headerAddBtn.addEventListener('click', () => {
+      window.openAddMealPhotoModalForDay(currentDiaryDay);
+    });
+  }
+  if (dayAddBtn) {
+    dayAddBtn.addEventListener('click', () => {
+      window.openAddMealPhotoModalForDay(currentDiaryDay);
+    });
+  }
+  if (closeAddMealModalBtn && addMealModal) {
+    closeAddMealModalBtn.addEventListener('click', () => addMealModal.classList.remove('show'));
+    addMealModal.addEventListener('click', (e) => {
+      if (e.target === addMealModal) addMealModal.classList.remove('show');
+    });
+  }
+
+  // Trigger file picker or camera when tapping photo box
+  if (diaryPreviewBox && diaryFileInput) {
+    diaryPreviewBox.addEventListener('click', () => {
+      diaryFileInput.click();
+    });
+  }
+
+  if (diaryFileInput) {
+    diaryFileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        currentCapturedPhotoData = event.target.result;
+        if (diaryPreviewImg) {
+          diaryPreviewImg.src = currentCapturedPhotoData;
+          diaryPreviewImg.style.display = 'block';
+        }
+        if (diaryPlaceholder) diaryPlaceholder.style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Handle Form Submission
+  if (diaryForm) {
+    diaryForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const targetDay = (diaryDaySelect ? diaryDaySelect.value : 'mon') || 'mon';
+      const title = (diaryNameInput ? diaryNameInput.value.trim() : '') || 'Meal Photo';
+      const mealSlot = (diaryMealSlotSelect ? diaryMealSlotSelect.value : 'Lunch') || 'Lunch';
+      const calories = parseInt(diaryCalInput ? diaryCalInput.value : '0', 10) || 0;
+      const time = (diaryTimeInput ? diaryTimeInput.value.trim() : '') || '12:00 PM';
+      const isCheat = diaryCheatInput ? diaryCheatInput.checked : false;
+      const notes = (diaryNotesInput ? diaryNotesInput.value.trim() : '');
+
+      const photoSrc = currentCapturedPhotoData || getFoodPlaceholderSvg(title);
+
+      const newMeal = {
+        id: `meal_${Date.now()}`,
+        title,
+        mealSlot,
+        time,
+        calories,
+        isCheat,
+        img: photoSrc,
+        notes
+      };
+
+      if (!weeklyDiaryData[targetDay]) weeklyDiaryData[targetDay] = [];
+      weeklyDiaryData[targetDay].push(newMeal);
+
+      saveWeeklyDiaryData();
+      renderWeeklyMealsUI();
+
+      if (addMealModal) addMealModal.classList.remove('show');
+
+      const cheatMsg = isCheat ? ' (Logged as Cheat Meal 🍕)' : '';
+      showToast(`📸 Added "${title}" to ${dayNamesMap[targetDay]}${cheatMsg}!`);
+    });
+  }
+
+  // Initial render of Weekly Food Diary UI
+  renderWeeklyMealsUI();
 
   // Expose FitTrackApp API globally for testing and automation
   window.FitTrackApp = {

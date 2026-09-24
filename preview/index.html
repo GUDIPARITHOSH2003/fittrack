@@ -462,6 +462,21 @@
                 <li class="meal-empty-note">No snacks logged yet today. Tap + to add food.</li>
               </ul>
             </div>
+
+            <!-- Weekly Visual Food Diary Quick Card -->
+            <div class="card weekly-diary-jump-card" id="jumpToWeeklyMealsCard" style="margin-top: 14px; background: linear-gradient(135deg, #1A1A1A 0%, #2A2A2A 100%); color: #FFFFFF; border-radius: 20px; padding: 16px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 18px rgba(0,0,0,0.12); transition: transform 0.2s ease;">
+              <div style="flex: 1; padding-right: 12px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                  <span style="font-size: 9.5px; font-weight: 800; background: rgba(212,241,98,0.22); color: #D4F162; padding: 2px 7px; border-radius: 6px; letter-spacing: 0.5px;">📸 WEEKLY PHOTO LOG</span>
+                  <span style="font-size: 11px; color: #9CA3AF;" id="nutritionWeeklyCheatTag">3 Cheat Meals Logged</span>
+                </div>
+                <h4 style="font-size: 14px; font-weight: 700; color: #FFFFFF; margin: 0 0 2px 0;">Weekly Food &amp; Cheat Diary</h4>
+                <p style="font-size: 11px; color: #D1D5DB; margin: 0;">See all photos eaten Mon–Sun &amp; hold yourself accountable!</p>
+              </div>
+              <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -524,7 +539,143 @@
           </div>
         </section>
 
-        <!-- ==================== TAB 3: OVERVIEW ==================== -->
+        <!-- ==================== TAB 3: WEEKLY MEAL DIARY ==================== -->
+        <section id="tabWeeklyMeals" class="screen-tab">
+          <header class="tab-header">
+            <div>
+              <span class="date-chip" id="weeklyDiaryDateChip">THIS WEEK • MON – SUN</span>
+              <h1 class="screen-title">Weekly Food Diary</h1>
+            </div>
+            <button class="pill-btn primary" id="headerAddMealPhotoBtn" style="font-size: 11px; padding: 7px 12px; font-weight: 700; border-radius: 20px; display: flex; align-items: center; gap: 5px;">
+              <span>📸</span>
+              <span>+ Add Photo</span>
+            </button>
+          </header>
+
+          <!-- Accountability Mirror Banner -->
+          <div class="weekly-accountability-card">
+            <div class="weekly-acc-top">
+              <div class="weekly-acc-title-wrap">
+                <span class="weekly-acc-fire-icon">🔥</span>
+                <div>
+                  <h3 class="weekly-acc-title">Weekly Visual Audit</h3>
+                  <p class="weekly-acc-sub">Review every meal photo to eliminate cheat habits</p>
+                </div>
+              </div>
+              <div class="weekly-diet-badge" id="weeklyDietScoreBadge">88% Clean</div>
+            </div>
+
+            <!-- Stats 4-Row Grid -->
+            <div class="weekly-stats-row">
+              <div class="weekly-stat-cell">
+                <span class="weekly-stat-val" id="statWeeklyTotal">25</span>
+                <span class="weekly-stat-label">Meals Logged</span>
+              </div>
+              <div class="weekly-stat-cell">
+                <span class="weekly-stat-val clean-val" id="statWeeklyClean">22</span>
+                <span class="weekly-stat-label">Clean Meals 🥗</span>
+              </div>
+              <div class="weekly-stat-cell">
+                <span class="weekly-stat-val cheat-val" id="statWeeklyCheat">3</span>
+                <span class="weekly-stat-label">Cheat Meals 🍕</span>
+              </div>
+              <div class="weekly-stat-cell">
+                <span class="weekly-stat-val" id="statWeeklyDays">7/7</span>
+                <span class="weekly-stat-label">Days Tracked</span>
+              </div>
+            </div>
+
+            <!-- Ratio Progress Bar -->
+            <div class="weekly-progress-wrap">
+              <div class="weekly-progress-bar">
+                <div class="weekly-progress-clean" id="weeklyProgressClean" style="width: 88%;"></div>
+                <div class="weekly-progress-cheat" id="weeklyProgressCheat" style="width: 12%;"></div>
+              </div>
+              <div class="weekly-progress-legend">
+                <span><span class="legend-dot clean-dot"></span> Clean Meals</span>
+                <span><span class="legend-dot cheat-dot"></span> Cheat Meals (Look Below)</span>
+              </div>
+            </div>
+
+            <!-- Accountability Advice Callout -->
+            <div class="weekly-cheat-callout" id="weeklyCheatCallout">
+              <div class="cheat-callout-icon">⚠️</div>
+              <div class="cheat-callout-text" id="weeklyCheatCalloutText">
+                <strong>Cheat Meal Alert:</strong> 3 cheat meals logged this week (Pizza on Wed, Burger on Fri, Brownie on Sun). Seeing the photos keeps you disciplined so you don't repeat them!
+              </div>
+            </div>
+          </div>
+
+          <!-- Week Switcher Controls -->
+          <div class="week-nav-bar">
+            <button class="week-arrow-btn" id="prevWeekBtn" title="Previous Week">‹</button>
+            <div class="week-range-text" id="weekRangeLabel">Sep 22 – Sep 28, 2026</div>
+            <button class="week-arrow-btn" id="nextWeekBtn" title="Next Week">›</button>
+          </div>
+
+          <!-- 7-Day Filter Chips Row + Full Week Mosaic Tab -->
+          <div class="day-chips-scroll" id="weeklyDayChipsRow">
+            <button class="day-chip active" data-day="mon">
+              <span class="day-name">MON</span>
+              <span class="day-count" id="countBadgeMon">5</span>
+            </button>
+            <button class="day-chip" data-day="tue">
+              <span class="day-name">TUE</span>
+              <span class="day-count" id="countBadgeTue">4</span>
+            </button>
+            <button class="day-chip" data-day="wed">
+              <span class="day-name">WED</span>
+              <span class="day-count alert-count" id="countBadgeWed">4</span>
+            </button>
+            <button class="day-chip" data-day="thu">
+              <span class="day-name">THU</span>
+              <span class="day-count" id="countBadgeThu">4</span>
+            </button>
+            <button class="day-chip" data-day="fri">
+              <span class="day-name">FRI</span>
+              <span class="day-count alert-count" id="countBadgeFri">4</span>
+            </button>
+            <button class="day-chip" data-day="sat">
+              <span class="day-name">SAT</span>
+              <span class="day-count" id="countBadgeSat">3</span>
+            </button>
+            <button class="day-chip" data-day="sun">
+              <span class="day-name">SUN</span>
+              <span class="day-count alert-count" id="countBadgeSun">3</span>
+            </button>
+            <button class="day-chip all-week-chip" data-day="all">
+              <span class="day-name">✨ ALL WEEK</span>
+              <span class="day-count" id="countBadgeAll">27</span>
+            </button>
+          </div>
+
+          <!-- Day View Active Header & Action Bar -->
+          <div class="day-view-action-bar">
+            <div>
+              <h2 class="day-view-heading" id="activeDayHeading">Monday's Meals</h2>
+              <p class="day-view-sub" id="activeDaySub">5 photos logged • All meals clean</p>
+            </div>
+            <button class="pill-btn secondary" id="dayAddMealPhotoBtn" style="font-size: 11px; padding: 6px 12px; font-weight: 700; border-radius: 16px;">
+              + Add Meal Photo
+            </button>
+          </div>
+
+          <!-- Meals Grid Container (Single Day or All-Week Mosaic) -->
+          <div class="weekly-meals-grid" id="weeklyMealsGrid">
+            <!-- Dynamically populated meal cards -->
+          </div>
+
+          <!-- End of Week Habit Mirror Note -->
+          <div class="card weekly-mirror-advice-card">
+            <div style="font-size: 24px; margin-bottom: 6px;">🪞</div>
+            <h4 style="font-size: 13px; font-weight: 700; margin-bottom: 4px;">Why The Visual Food Log Works</h4>
+            <p style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+              Writing calories down is easy to ignore, but looking at a high-res photo of what you actually put in your body builds instant visual awareness. If you slipped up and ate a cheat meal, seeing it in your weekly audit stops one bad meal from turning into a bad month!
+            </p>
+          </div>
+        </section>
+
+        <!-- ==================== TAB 4: OVERVIEW ==================== -->
         <section id="tabOverview" class="screen-tab">
           <header class="tab-header">
             <div>
@@ -851,7 +1002,16 @@
         </section>
       </div>
 
-      <!-- ==================== CUSTOM 5-TAB BOTTOM NAVIGATION ==================== -->
+      <!-- ==================== FLOATING QUICK SCANNER ACTION BUTTON ==================== -->
+      <!-- Elevated above bottom nav bar as requested -->
+      <button class="nav-center-scan-btn" id="centerScanBtn" title="Scan Food with AI Camera">
+        <div class="scan-pulse-ring"></div>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="#FFFFFF">
+          <path d="M4 4h4V2H4C2.9 2 2 2.9 2 4v4h2V4zm16-2h-4v2h4v4h2V4c0-1.1-.9-2-2-2zm0 18h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4zM4 16H2v4c0 1.1.9 2 2 2h4v-2H4v-4zm5-9h6v2H9V7zm0 4h6v2H9v-2zm0 4h6v2H9v-2z"/>
+        </svg>
+      </button>
+
+      <!-- ==================== 5-TAB BOTTOM NAVIGATION ==================== -->
       <nav class="bottom-nav-bar">
         <!-- Tab 1: Nutrition -->
         <button class="nav-item active" data-tab="tabNutrition">
@@ -873,15 +1033,17 @@
           <span class="nav-label">Workout</span>
         </button>
 
-        <!-- CENTER FLOATING SCANNER ACTION BUTTON (#6200EE) -->
-        <button class="nav-center-scan-btn" id="centerScanBtn" title="Scan Barcode & Food">
-          <div class="scan-pulse-ring"></div>
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="#FFFFFF">
-            <path d="M4 4h4V2H4C2.9 2 2 2.9 2 4v4h2V4zm16-2h-4v2h4v4h2V4c0-1.1-.9-2-2-2zm0 18h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4zM4 16H2v4c0 1.1.9 2 2 2h4v-2H4v-4zm5-9h6v2H9V7zm0 4h6v2H9v-2zm0 4h6v2H9v-2z"/>
-          </svg>
+        <!-- Tab 3: Weekly Diary (New Feature) -->
+        <button class="nav-item" data-tab="tabWeeklyMeals">
+          <div class="nav-icon-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 14c3.31 0 6-2.69 6-6s-2.69-6-6-6-6 2.69-6 6 2.69 6 6 6zm0-2c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/>
+            </svg>
+          </div>
+          <span class="nav-label">Weekly Diary</span>
         </button>
 
-        <!-- Tab 3: Overview -->
+        <!-- Tab 4: Overview -->
         <button class="nav-item" data-tab="tabOverview">
           <div class="nav-icon-wrap">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -891,7 +1053,7 @@
           <span class="nav-label">Overview</span>
         </button>
 
-        <!-- Tab 4: Profile -->
+        <!-- Tab 5: Profile -->
         <button class="nav-item" data-tab="tabProfile">
           <div class="nav-icon-wrap">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -901,6 +1063,121 @@
           <span class="nav-label">Profile</span>
         </button>
       </nav>
+
+      <!-- ==================== ADD MEAL PHOTO MODAL ==================== -->
+      <div class="modal-backdrop" id="addMealPhotoModalBackdrop">
+        <div class="modal-sheet" style="max-height: 90vh; overflow-y: auto;">
+          <div class="modal-header">
+            <div>
+              <h3 class="modal-title">Log Meal Photo</h3>
+              <p class="modal-sub">Add to your weekly visual food diary</p>
+            </div>
+            <button class="modal-close-btn" id="closeAddMealPhotoModal">&times;</button>
+          </div>
+
+          <form id="addMealPhotoForm" style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
+            <!-- Day & Meal Slot Selector Row -->
+            <div style="display: flex; gap: 10px;">
+              <div style="flex: 1;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; display: block;">Day of Week</label>
+                <select id="diaryDaySelect" style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--border-subtle); background: var(--surface-secondary); font-weight: 600;">
+                  <option value="mon">Monday</option>
+                  <option value="tue">Tuesday</option>
+                  <option value="wed">Wednesday</option>
+                  <option value="thu">Thursday</option>
+                  <option value="fri">Friday</option>
+                  <option value="sat">Saturday</option>
+                  <option value="sun">Sunday</option>
+                </select>
+              </div>
+              <div style="flex: 1;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; display: block;">Meal Slot</label>
+                <select id="diaryMealSlotSelect" style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--border-subtle); background: var(--surface-secondary); font-weight: 600;">
+                  <option value="Breakfast">Breakfast</option>
+                  <option value="Lunch">Lunch</option>
+                  <option value="Dinner">Dinner</option>
+                  <option value="Snack">Snack</option>
+                  <option value="Late Night">Late Night</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Photo Upload / Capture Box -->
+            <div>
+              <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; display: block;">Meal Photo</label>
+              
+              <!-- Hidden File Input -->
+              <input type="file" id="diaryPhotoFileInput" accept="image/*" capture="environment" style="display: none;">
+
+              <!-- Photo Preview / Picker Container -->
+              <div id="diaryPhotoPreviewBox" style="border: 2px dashed var(--border-subtle); border-radius: 16px; padding: 16px; text-align: center; background: var(--surface-secondary); cursor: pointer; transition: all 0.2s ease;">
+                <img id="diaryPreviewImg" alt="Meal Preview" style="display: none; width: 100%; height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 8px;">
+                <div id="diaryPhotoPlaceholder">
+                  <div style="font-size: 28px; margin-bottom: 4px;">📸</div>
+                  <div style="font-weight: 700; font-size: 13px;">Snap Camera Photo or Upload</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Tap to take picture or choose from gallery</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Meal Name & Calories -->
+            <div>
+              <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; display: block;">Dish / Meal Name</label>
+              <input type="text" id="diaryMealNameInput" placeholder="e.g. Grilled Chicken &amp; Avocado Rice" required style="width: 100%; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #FFF; font-weight: 600;">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+              <div style="flex: 1;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; display: block;">Calories (kcal)</label>
+                <input type="number" id="diaryMealCaloriesInput" placeholder="e.g. 450" style="width: 100%; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #FFF; font-weight: 600;">
+              </div>
+              <div style="flex: 1;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; display: block;">Time</label>
+                <input type="text" id="diaryMealTimeInput" placeholder="e.g. 1:15 PM" style="width: 100%; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #FFF; font-weight: 600;">
+              </div>
+            </div>
+
+            <!-- CHEAT MEAL TOGGLE CARD -->
+            <div style="background: rgba(239,68,68,0.06); border: 1.5px solid rgba(239,68,68,0.25); border-radius: 14px; padding: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 13px; color: #DC2626;">
+                <input type="checkbox" id="diaryIsCheatInput" style="width: 18px; height: 18px; accent-color: #EF4444; cursor: pointer;">
+                <span>🍕 Mark as Cheat Meal</span>
+              </label>
+              <p style="font-size: 11px; color: #B91C1C; margin: 4px 0 0 26px; line-height: 1.4;">
+                Be honest! Seeing cheat meals visually in your weekly review keeps you disciplined and stops future cheating.
+              </p>
+            </div>
+
+            <!-- Notes / Reason (Optional) -->
+            <div>
+              <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; display: block;">Notes / Reflection (Optional)</label>
+              <input type="text" id="diaryMealNotesInput" placeholder="e.g. Late night takeout or craving" style="width: 100%; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #FFF; font-size: 12px;">
+            </div>
+
+            <!-- Save CTA -->
+            <button type="submit" class="dark-pill-cta" style="margin-top: 6px; padding: 13px; font-weight: 700; font-size: 14px;">
+              Save to Weekly Diary
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Photo Lightbox Modal -->
+      <div class="modal-backdrop" id="diaryPhotoLightboxBackdrop">
+        <div style="position: relative; max-width: 440px; width: 92%; background: #1A1A1A; border-radius: 24px; overflow: hidden; color: #FFF; box-shadow: 0 20px 40px rgba(0,0,0,0.5); margin: auto;">
+          <button id="closeLightboxBtn" style="position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,0.6); color: #FFF; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; z-index: 10; display: flex; align-items: center; justify-content: center;">&times;</button>
+          <img id="lightboxImg" src="" alt="Food Preview" style="width: 100%; height: 260px; object-fit: cover;">
+          <div style="padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span id="lightboxTag" style="font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 12px; background: rgba(255,255,255,0.15);"></span>
+              <span id="lightboxTime" style="font-size: 11.5px; color: #9CA3AF;"></span>
+            </div>
+            <h3 id="lightboxTitle" style="font-size: 16px; font-weight: 700; margin: 0 0 4px 0;"></h3>
+            <p id="lightboxCalories" style="font-size: 13px; color: #D1D5DB; margin: 0 0 6px 0;"></p>
+            <p id="lightboxNotes" style="font-size: 11.5px; color: #9CA3AF; margin: 0; font-style: italic;"></p>
+          </div>
+        </div>
+      </div>
 
       <!-- Toast Notice -->
       <div class="toast-notice" id="authToastNotice">
