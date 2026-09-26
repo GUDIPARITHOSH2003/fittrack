@@ -2712,8 +2712,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (user.name) {
       const pInitials = user.name.trim().split(/\s+/).map(p => p[0]).join('').toUpperCase().slice(0, 2) || 'P';
       const singleInitial = (user.name.trim().charAt(0) || 'P').toUpperCase();
-      if (pAvatar) pAvatar.textContent = pInitials;
+      const fallback = document.getElementById('profileAvatarFallback');
+      if (fallback) fallback.textContent = pInitials;
+      else if (pAvatar) pAvatar.textContent = pInitials;
       headerAvatars.forEach(av => { av.textContent = singleInitial; });
+    }
+
+    const savedPhoto = user.photo || (user.email ? localStorage.getItem('fittrack_profile_photo_' + user.email) : null) || localStorage.getItem('fittrack_profile_photo_default');
+    if (typeof setProfileAvatarPhoto === 'function') {
+      setProfileAvatarPhoto(savedPhoto);
     }
     if (pAge && user.age) pAge.innerHTML = `${user.age} <small>yrs</small>`;
     if (pWeight && user.weight) pWeight.innerHTML = `${user.weight} <small>kg</small>`;
@@ -4453,6 +4460,164 @@ document.addEventListener('DOMContentLoaded', () => {
   if (editParamsBtn) {
     editParamsBtn.addEventListener('click', openEditProfileModal);
   }
+  const accountPersonalDataRow = document.getElementById('accountPersonalDataRow');
+  if (accountPersonalDataRow) {
+    accountPersonalDataRow.addEventListener('click', openEditProfileModal);
+  }
+
+  const popupNotificationToggle = document.getElementById('popupNotificationToggle');
+  if (popupNotificationToggle) {
+    const savedNotif = localStorage.getItem('fittrack_popup_notifications');
+    if (savedNotif !== null) {
+      popupNotificationToggle.checked = (savedNotif === 'true');
+    }
+    popupNotificationToggle.addEventListener('change', () => {
+      localStorage.setItem('fittrack_popup_notifications', popupNotificationToggle.checked);
+      if (typeof showToast === 'function') {
+        showToast(popupNotificationToggle.checked ? '🔔 Pop-up notifications enabled' : '🔕 Pop-up notifications disabled');
+      }
+    });
+  }
+
+  // Profile Photo Display & Upload Logic
+  function setProfileAvatarPhoto(photoUrl) {
+    const avatarImg = document.getElementById('profileUserAvatarImg');
+    const avatarFallback = document.getElementById('profileAvatarFallback');
+    const headerBtns = document.querySelectorAll('.header-profile-jump');
+    const topBackdrop = document.getElementById('profileTopBackdrop');
+
+    if (photoUrl) {
+      if (topBackdrop) {
+        topBackdrop.style.backgroundImage = `url("${photoUrl}")`;
+        topBackdrop.classList.add('has-photo');
+      }
+      if (avatarImg) {
+        avatarImg.src = photoUrl;
+        avatarImg.style.display = 'block';
+      }
+      if (avatarFallback) {
+        avatarFallback.style.display = 'none';
+      }
+      headerBtns.forEach(btn => {
+        let img = btn.querySelector('.header-avatar-img');
+        const initials = btn.querySelector('.avatar-initials');
+        if (!img) {
+          img = document.createElement('img');
+          img.className = 'header-avatar-img';
+          img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;';
+          btn.appendChild(img);
+        }
+        img.src = photoUrl;
+        img.style.display = 'block';
+        if (initials) initials.style.display = 'none';
+      });
+    } else {
+      if (topBackdrop) {
+        topBackdrop.style.backgroundImage = 'none';
+        topBackdrop.classList.remove('has-photo');
+      }
+      if (avatarImg) avatarImg.style.display = 'none';
+      if (avatarFallback) avatarFallback.style.display = 'inline';
+      headerBtns.forEach(btn => {
+        const img = btn.querySelector('.header-avatar-img');
+        const initials = btn.querySelector('.avatar-initials');
+        if (img) img.style.display = 'none';
+        if (initials) initials.style.display = 'inline';
+      });
+    }
+  }
+
+  function handleProfilePhotoUpload(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      if (typeof showToast === 'function') showToast('⚠️ Please select a valid image file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // Resize to max 320x320 using canvas for fast performance & light localStorage footprint
+        const maxDim = 320;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+        // Update DOM
+        setProfileAvatarPhoto(compressedDataUrl);
+
+        // Persist photo to user profile & localStorage
+        let curUser = null;
+        try {
+          curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+        } catch (err) {}
+        const email = curUser ? curUser.email : null;
+        if (email) {
+          localStorage.setItem('fittrack_profile_photo_' + email, compressedDataUrl);
+          if (curUser) {
+            curUser.photo = compressedDataUrl;
+            localStorage.setItem('fittrack_user', JSON.stringify(curUser));
+          }
+          if (typeof saveUserData === 'function') saveUserData(email);
+        } else {
+          localStorage.setItem('fittrack_profile_photo_default', compressedDataUrl);
+        }
+
+        if (typeof showToast === 'function') showToast('📸 Profile photo updated successfully!');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  const profileAvatarUploadTrigger = document.getElementById('profileAvatarUploadTrigger');
+  const avatarCameraBtn = document.getElementById('avatarCameraBtn');
+  const profilePhotoFileInput = document.getElementById('profilePhotoFileInput');
+
+  function triggerProfilePhotoPicker() {
+    if (profilePhotoFileInput) profilePhotoFileInput.click();
+  }
+
+  if (profileAvatarUploadTrigger) {
+    profileAvatarUploadTrigger.addEventListener('click', () => {
+      triggerProfilePhotoPicker();
+    });
+  }
+  if (avatarCameraBtn) {
+    avatarCameraBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      triggerProfilePhotoPicker();
+    });
+  }
+
+  if (profilePhotoFileInput) {
+    profilePhotoFileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        handleProfilePhotoUpload(file);
+      }
+      profilePhotoFileInput.value = '';
+    });
+  }
+
   if (closeEditProfileModalBtn) {
     closeEditProfileModalBtn.addEventListener('click', closeEditProfileModal);
   }
