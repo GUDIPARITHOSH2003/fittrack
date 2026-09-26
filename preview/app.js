@@ -876,7 +876,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Tab Navigation Switching
+  let lastActiveTabBeforeProfile = 'tabNutrition';
+
   function switchTab(targetTabId) {
+    if (targetTabId !== 'tabProfile') {
+      lastActiveTabBeforeProfile = targetTabId;
+    }
+
     screenTabs.forEach(tab => {
       if (tab.id === targetTabId) {
         tab.classList.add('active');
@@ -922,8 +928,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  if (headerProfileJump) {
-    headerProfileJump.addEventListener('click', () => switchTab('tabProfile'));
+  // Top header Profile jump buttons ('P' circle)
+  document.querySelectorAll('.header-profile-jump').forEach(btn => {
+    btn.addEventListener('click', () => switchTab('tabProfile'));
+  });
+
+  // Back button on Profile screen
+  const profileBackBtn = document.getElementById('profileBackBtn');
+  if (profileBackBtn) {
+    profileBackBtn.addEventListener('click', () => {
+      switchTab(lastActiveTabBeforeProfile || 'tabNutrition');
+    });
   }
 
   function clearScannerInputs() {
@@ -2447,6 +2462,114 @@ document.addEventListener('DOMContentLoaded', () => {
       if (metricSleepTitle) metricSleepTitle.textContent = "Weekly Sleep";
       if (metricSleepSub) metricSleepSub.textContent = isDemo ? "7h 22m daily avg" : "No weekly sleep recorded";
     }
+
+    // Dynamically update the Daily Calorie Burn Trend chart based on actual logged calories
+    updateDailyCalorieBurnTrend();
+  }
+
+  function updateDailyCalorieBurnTrend() {
+    const histBars = document.querySelector('.histogram-bars');
+    if (!histBars) return;
+
+    const baseDate = getBaseDate();
+    const dayOfWeek = baseDate.getDay();
+    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+
+    const monday = new Date(baseDate);
+    monday.setDate(baseDate.getDate() + diffToMonday);
+
+    let curUser = null;
+    try {
+      curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+    } catch (e) {}
+    const email = curUser ? curUser.email : null;
+    const isDemo = email === 'alex.rivera@wellness.io';
+
+    let historyMap = {};
+    if (email) {
+      try {
+        historyMap = JSON.parse(localStorage.getItem('fittrack_history_' + email) || '{}');
+      } catch (e) {}
+    }
+
+    const todayStr = getTodayDateString();
+    const dayCols = histBars.querySelectorAll('.bar-col');
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const todayDayIndex = (baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1);
+
+    const demoDefaults = [
+      { consumed: 2150, burned: 420 },
+      { consumed: 1980, burned: 380 },
+      { consumed: 2240, burned: 450 },
+      { consumed: 2010, burned: 350 },
+      { consumed: 2320, burned: 490 },
+      { consumed: 1850, burned: 310 },
+      { consumed: 1720, burned: 260 }
+    ];
+
+    const dayBurns = [];
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(monday);
+      dayDate.setDate(monday.getDate() + i);
+
+      const yyyy = dayDate.getFullYear();
+      const mm = String(dayDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(dayDate.getDate()).padStart(2, '0');
+      const dateKey = `${yyyy}-${mm}-${dd}`;
+
+      let burned = 0;
+      if (dateKey === todayStr) {
+        burned = state.activeBurned || 0;
+      } else if (historyMap[dateKey] && historyMap[dateKey].burned !== undefined) {
+        burned = historyMap[dateKey].burned || 0;
+      } else if (isDemo && dayDate < baseDate) {
+        burned = demoDefaults[i].burned;
+      }
+      dayBurns.push(burned);
+    }
+
+    const maxBurn = Math.max(...dayBurns, 0);
+    const chartSummary = document.getElementById('chartBurnSummary');
+    if (chartSummary) {
+      if (maxBurn > 0) {
+        chartSummary.textContent = `Peak: ${maxBurn.toLocaleString()} kcal`;
+        chartSummary.style.color = 'var(--accent-steps)';
+      } else {
+        chartSummary.textContent = '0 kcal peak';
+        chartSummary.style.color = 'var(--text-muted)';
+      }
+    }
+
+    dayCols.forEach((col, i) => {
+      const fill = col.querySelector('.bar-fill');
+      const burn = dayBurns[i] || 0;
+      const isPeak = maxBurn > 0 && burn === maxBurn;
+      const isToday = (i === todayDayIndex);
+
+      if (isToday) {
+        col.classList.add('is-today');
+      } else {
+        col.classList.remove('is-today');
+      }
+
+      if (isPeak) {
+        col.classList.add('peak');
+      } else {
+        col.classList.remove('peak');
+      }
+
+      if (fill) {
+        if (burn > 0 && maxBurn > 0) {
+          // Proportionally scale height up to 95% based on actual calorie burn
+          const pct = Math.max(12, Math.round((burn / maxBurn) * 95));
+          fill.style.height = `${pct}%`;
+        } else {
+          fill.style.height = '6px';
+        }
+      }
+
+      col.title = `${dayNames[i]}: ${burn.toLocaleString()} kcal burned`;
+    });
   }
 
   overviewPeriodTabs.forEach(tab => {
@@ -2576,7 +2699,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pName = document.getElementById('profileUserName');
     const pEmail = document.getElementById('profileUserEmail');
     const pAvatar = document.getElementById('profileUserAvatar');
-    const headerAvatar = document.querySelector('#headerProfileJump .avatar-initials');
+    const headerAvatars = document.querySelectorAll('.header-profile-jump .avatar-initials');
     const pAge = document.getElementById('profileAgeVal');
     const pWeight = document.getElementById('profileWeightVal');
     const pHeight = document.getElementById('profileHeightVal');
@@ -2587,9 +2710,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (pName && user.name) pName.textContent = user.name;
     if (pEmail && user.email) pEmail.textContent = user.email;
     if (user.name) {
-      const initials = user.name.trim().split(/\s+/).map(p => p[0]).join('').toUpperCase().slice(0, 2) || 'FT';
-      if (pAvatar) pAvatar.textContent = initials;
-      if (headerAvatar) headerAvatar.textContent = initials;
+      const pInitials = user.name.trim().split(/\s+/).map(p => p[0]).join('').toUpperCase().slice(0, 2) || 'P';
+      const singleInitial = (user.name.trim().charAt(0) || 'P').toUpperCase();
+      if (pAvatar) pAvatar.textContent = pInitials;
+      headerAvatars.forEach(av => { av.textContent = singleInitial; });
     }
     if (pAge && user.age) pAge.innerHTML = `${user.age} <small>yrs</small>`;
     if (pWeight && user.weight) pWeight.innerHTML = `${user.weight} <small>kg</small>`;
@@ -2741,8 +2865,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 5. Overview Tab Data
     updateOverviewMetrics();
-    const histBars = document.querySelectorAll('.histogram-bars .bar-fill');
-    histBars.forEach(b => b.style.height = '4px');
 
     if (shouldPersist && curUser && curUser.email) {
       saveUserData(curUser.email);
@@ -2841,11 +2963,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ensureDeleteButtonsInMealLists();
     updateOverviewMetrics();
-    const heights = ['65%', '80%', '60%', '95%', '75%', '85%', '50%'];
-    const barFills = document.querySelectorAll('.histogram-bars .bar-fill');
-    barFills.forEach((b, i) => {
-      if (heights[i]) b.style.height = heights[i];
-    });
   }
 
   let syncDebounceTimer = null;
