@@ -356,5 +356,39 @@
     },
     "createdAt": 1789638714956,
     "updatedAt": 1789638714956
+  },
+  {
+    "id": "usr_g_1790405465576_12jwse",
+    "email": "parithoshgudi2003@gmail.com",
+    "passwordHash": null,
+    "salt": null,
+    "googleId": "117111725493479036903",
+    "name": "parithosh",
+    "age": 23,
+    "weight": 70,
+    "height": 170,
+    "gymFrequency": "2-3 days/wk",
+    "goal": "maintain",
+    "nutritionTargets": {
+      "bmr": 1653,
+      "maintenanceCalories": 2273,
+      "targetCalories": 2273,
+      "calorieAdjustment": 0,
+      "goal": "maintain",
+      "goalLabel": "Maintain Weight",
+      "targetProtein": 170,
+      "targetCarbs": 256,
+      "targetFats": 63,
+      "targetFiber": 32,
+      "targetWater": 2450,
+      "mealBreakdown": {
+        "breakfast": 636,
+        "lunch": 796,
+        "dinner": 614,
+        "snack": 227
+      }
+    },
+    "createdAt": 1790405465576,
+    "updatedAt": 1790407032988
   }
 ]

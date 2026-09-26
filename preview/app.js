@@ -5359,7 +5359,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const headerAddBtn = document.getElementById('headerAddMealPhotoBtn');
   const dayAddBtn = document.getElementById('dayAddMealPhotoBtn');
   const diaryForm = document.getElementById('addMealPhotoForm');
-  const diaryDaySelect = document.getElementById('diaryDaySelect');
+  const diaryDayDisplay = document.getElementById('diaryDayDisplay') || document.getElementById('diaryDaySelect');
   const diaryMealSlotSelect = document.getElementById('diaryMealSlotSelect');
   const diaryFileInput = document.getElementById('diaryPhotoFileInput');
   const diaryPreviewBox = document.getElementById('diaryPhotoPreviewBox');
@@ -5377,15 +5377,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const todayIdx = getCurrentWeekDayIndex();
     const todayKey = dayKeys[todayIdx];
 
-    // Lock Day selector strictly to Today
-    if (diaryDaySelect) {
-      Array.from(diaryDaySelect.options).forEach((opt, idx) => {
-        const isToday = (idx === todayIdx);
-        opt.disabled = !isToday;
-        opt.textContent = isToday ? `${dayNamesMap[opt.value]} (Today)` : dayNamesMap[opt.value];
-      });
-      diaryDaySelect.value = todayKey;
-      diaryDaySelect.disabled = true;
+    // Set Day display strictly to Today (no arrow, clean label)
+    const todayName = dayNamesMap[todayKey] || 'Today';
+    const dayLabel = `${todayName} (Today)`;
+    if (diaryDayDisplay) {
+      if (diaryDayDisplay.tagName === 'SELECT') {
+        Array.from(diaryDayDisplay.options).forEach((opt, idx) => {
+          const isToday = (idx === todayIdx);
+          opt.disabled = !isToday;
+          opt.textContent = isToday ? `${dayNamesMap[opt.value]} (Today)` : dayNamesMap[opt.value];
+        });
+        diaryDayDisplay.value = todayKey;
+        diaryDayDisplay.disabled = true;
+      } else {
+        diaryDayDisplay.textContent = dayLabel;
+      }
     }
 
     if (diaryTimeInput) {

@@ -1408,8 +1408,11 @@ const server = http.createServer(async (req, res) => {
       }
 
       const normalizedEmail = targetEmail.trim().toLowerCase();
-      const users = getUsers();
-      const user = users.find(u => u.email && u.email.toLowerCase() === normalizedEmail);
+      let user = await db.getUserByEmail(normalizedEmail);
+      if (!user) {
+        const users = getUsers();
+        user = users.find(u => u.email && u.email.toLowerCase() === normalizedEmail);
+      }
 
       if (user && user.age && user.weight && user.height) {
         const effectiveGoal = user.goal || (user.nutritionTargets ? user.nutritionTargets.goal : 'maintain') || 'maintain';
@@ -1546,6 +1549,20 @@ const server = http.createServer(async (req, res) => {
         console.log(`[API] User authenticated via Google in DB: ${user.name} (${user.email}) | Goal: ${targets.goalLabel} | Target: ${targets.targetCalories} kcal`);
       }
 
+      // Keep local users.json in sync with DB
+      try {
+        const localUsers = getUsers();
+        const existingIdx = localUsers.findIndex(u => u.email && u.email.toLowerCase() === normalizedEmail);
+        if (existingIdx !== -1) {
+          localUsers[existingIdx] = { ...localUsers[existingIdx], ...user };
+        } else {
+          localUsers.push(user);
+        }
+        saveUsers(localUsers);
+      } catch (syncErr) {
+        console.warn('Could not sync user to users.json:', syncErr);
+      }
+
       // Generate Session Token
       const token = generateToken();
       activeSessions.set(token, {
@@ -1577,38 +1594,6 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('[API] Google auth error:', err);
       return sendJson(res, 500, { success: false, message: 'Google authentication failed due to a server error' });
-    }
-  }
-
-  // 8. POST /api/auth/google/check (Check if Google user already exists)
-  if (pathname === '/api/auth/google/check' && req.method === 'POST') {
-    try {
-      const body = await parseJsonBody(req);
-      const { email } = body;
-      if (!email || typeof email !== 'string') {
-        return sendJson(res, 400, { success: false, message: 'Email is required' });
-      }
-      const users = getUsers();
-      const normalizedEmail = email.trim().toLowerCase();
-      const user = users.find(u => u.email.toLowerCase() === normalizedEmail);
-      return sendJson(res, 200, {
-        success: true,
-        exists: !!user,
-        user: user ? {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          picture: user.picture || '',
-          age: user.age,
-          weight: user.weight,
-          height: user.height,
-          gymFrequency: user.gymFrequency,
-          nutritionTargets: user.nutritionTargets || calculateNutritionTargets(user.weight, user.height, user.age, user.gymFrequency),
-          authProvider: user.authProvider || 'google'
-        } : null
-      });
-    } catch (err) {
-      return sendJson(res, 500, { success: false, message: 'Check failed' });
     }
   }
 
