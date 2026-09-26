@@ -286,11 +286,11 @@ async function upsertDailyLog(userId, dateStr, logData) {
   if (!userId || !dateStr) return null;
   const now = Date.now();
 
-  const consumed = parseInt(logData.consumedCalories, 10) || 0;
-  const carbs = parseInt(logData.carbs, 10) || 0;
-  const protein = parseInt(logData.protein, 10) || 0;
-  const fats = parseInt(logData.fats, 10) || 0;
-  const fiber = parseInt(logData.fiber, 10) || 0;
+  const consumed = Math.round(parseFloat(logData.consumedCalories ?? logData.consumed) || 0);
+  const carbs = Math.round(parseFloat(logData.carbs) || 0);
+  const protein = Math.round(parseFloat(logData.protein) || 0);
+  const fats = Math.round(parseFloat(logData.fats ?? logData.fat) || 0);
+  const fiber = Math.round(parseFloat(logData.fiber) || 0);
   const waterIntake = parseInt(logData.waterIntake, 10) || 0;
   const waterTarget = parseInt(logData.waterTarget, 10) || 2500;
   const activeBurned = parseInt(logData.activeBurned, 10) || 0;
@@ -330,8 +330,8 @@ async function upsertDailyLog(userId, dateStr, logData) {
       date: dateStr,
       consumedCalories: consumed,
       carbs,
-      protein,
       fats,
+      fat: fats,
       fiber,
       waterIntake,
       waterTarget,
@@ -396,7 +396,8 @@ function formatDailyLogRow(row) {
     consumedCalories: row.consumed_calories,
     carbs: row.carbs,
     protein: row.protein,
-    fats: row.fats,
+    fats: row.fats !== null && row.fats !== undefined ? row.fats : (row.fat || 0),
+    fat: row.fats !== null && row.fats !== undefined ? row.fats : (row.fat || 0),
     fiber: row.fiber,
     waterIntake: row.water_intake,
     waterTarget: row.water_target,
@@ -422,13 +423,14 @@ async function getFavorites(userId) {
       protein: r.protein,
       carbs: r.carbs,
       fat: r.fat,
+      fats: r.fat,
       portion: r.portion,
       mealType: r.meal_type,
       createdAt: Number(r.created_at)
     }));
   } else {
     const map = readJson(FAVORITES_FILE, {});
-    return map[userId] || [];
+    return (map[userId] || []).map(f => ({ ...f, fats: f.fats !== undefined ? f.fats : f.fat, fat: f.fat !== undefined ? f.fat : f.fats }));
   }
 }
 
@@ -436,6 +438,7 @@ async function addFavorite(userId, fav) {
   if (!userId || !fav || !fav.name) return null;
   const now = Date.now();
   const id = fav.id || 'fav_' + now + '_' + Math.random().toString(36).substr(2, 6);
+  const parsedFat = parseFloat(fav.fat ?? fav.fats) || 0;
 
   const newFav = {
     id,
@@ -444,7 +447,8 @@ async function addFavorite(userId, fav) {
     calories: parseInt(fav.calories, 10) || 0,
     protein: parseFloat(fav.protein) || 0,
     carbs: parseFloat(fav.carbs) || 0,
-    fat: parseFloat(fav.fat) || 0,
+    fat: parsedFat,
+    fats: parsedFat,
     portion: fav.portion || '1 serving',
     mealType: fav.mealType || 'snack',
     createdAt: now

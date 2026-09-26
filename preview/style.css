@@ -11,8 +11,10 @@
   --pill-dark: #1A1A1A;
   --scanner-fab: #6200EE;
   
-  --accent-carbs: #EE924F;
+  --accent-carbs: #FF5722;
   --accent-protein: #1D3F37;
+  --accent-fats: #EAB308;
+  --accent-fiber: #10B981;
   --accent-steps: #D4F162;
   --accent-sleep: #E8D5C4;
   --accent-water: #3B82F6;
@@ -125,12 +127,15 @@ body {
 .bg-steps { background-color: var(--accent-steps); }
 .bg-carbs { background-color: var(--accent-carbs); }
 .bg-protein { background-color: var(--accent-protein); }
-.bg-fats { background-color: #E5A93B; }
+.bg-fats { background-color: var(--accent-fats); }
+.bg-fiber { background-color: var(--accent-fiber); }
 .bg-water { background-color: var(--accent-water); }
 
-.bg-carbs-light { background-color: rgba(238, 146, 79, 0.15); }
+.bg-carbs-light { background-color: rgba(255, 87, 34, 0.15); }
 .bg-steps-light { background-color: rgba(212, 241, 98, 0.4); }
 .bg-protein-light { background-color: rgba(29, 63, 55, 0.15); }
+.bg-fats-light { background-color: rgba(234, 179, 8, 0.18); }
+.bg-fiber-light { background-color: rgba(16, 185, 129, 0.18); }
 .bg-sleep-light { background-color: rgba(232, 213, 196, 0.45); }
 
 .pill-btn-small {
@@ -366,29 +371,24 @@ body {
   fill: none;
   stroke-width: 16;
   stroke-linecap: round;
-  transition: stroke-dashoffset 1s cubic-bezier(0.16, 1, 0.3, 1), stroke-dasharray 1s;
-}
-
-.arc-protein {
-  stroke: var(--accent-protein);
-  stroke-dasharray: 515; /* 2 * PI * 82 ≈ 515 */
-  stroke-dashoffset: 380;
+  transform-origin: 100px 100px;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.16, 1, 0.3, 1), stroke-dasharray 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
 }
 
 .arc-carbs {
   stroke: var(--accent-carbs);
-  stroke-dasharray: 515;
-  stroke-dashoffset: 340;
-  transform-origin: center;
-  transform: rotate(95deg);
+}
+
+.arc-protein {
+  stroke: var(--accent-protein);
 }
 
 .arc-fats {
-  stroke: #E5A93B;
-  stroke-dasharray: 515;
-  stroke-dashoffset: 460;
-  transform-origin: center;
-  transform: rotate(220deg);
+  stroke: var(--accent-fats);
+}
+
+.arc-fiber {
+  stroke: var(--accent-fiber);
 }
 
 .ring-center-info {
@@ -422,37 +422,43 @@ body {
 
 .macro-chips-row {
   display: flex;
-  justify-content: space-around;
+  justify-content: space-between;
+  gap: 4px;
   padding-top: 10px;
   border-top: 1px solid var(--border-subtle);
 }
 
 .macro-chip {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  min-width: 0;
 }
 
 .chip-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 11.5px;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .chip-label .dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .chip-val {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
 /* ==================== AI NLP Input Box ==================== */

@@ -876,6 +876,7 @@ function calculateNutritionTargets(weightKg, heightCm, age, gymFrequency, goal) 
     targetProtein: protein,
     targetCarbs: carbs,
     targetFats: fats,
+    targetFiber: Math.max(28, Math.round((targetCalories / 1000) * 14)),
     targetWater: waterTarget,
     mealBreakdown: {
       breakfast: breakfastCal,

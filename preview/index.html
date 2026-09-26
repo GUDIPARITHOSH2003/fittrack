@@ -318,12 +318,14 @@
               <svg class="ring-chart-svg" viewBox="0 0 200 200">
                 <!-- Background track -->
                 <circle cx="100" cy="100" r="82" class="ring-track" />
+                <!-- Carbs Arc (#FF5722) -->
+                <circle id="carbsRingArc" cx="100" cy="100" r="82" class="ring-segment arc-carbs" />
                 <!-- Protein Arc (#1D3F37) -->
                 <circle id="proteinRingArc" cx="100" cy="100" r="82" class="ring-segment arc-protein" />
-                <!-- Carbs Arc (#EE924F) -->
-                <circle id="carbsRingArc" cx="100" cy="100" r="82" class="ring-segment arc-carbs" />
-                <!-- Fats Arc (#E5A93B) -->
+                <!-- Fats Arc (#EAB308) -->
                 <circle id="fatsRingArc" cx="100" cy="100" r="82" class="ring-segment arc-fats" />
+                <!-- Fiber Arc (#10B981) -->
+                <circle id="fiberRingArc" cx="100" cy="100" r="82" class="ring-segment arc-fiber" />
               </svg>
               <div class="ring-center-info">
                 <span class="ring-calories-val" id="consumedCaloriesText">0</span>
@@ -344,6 +346,10 @@
               <div class="macro-chip">
                 <div class="chip-label"><span class="dot bg-fats"></span>Fats</div>
                 <div class="chip-val" id="fatsGramText">0g / 65g</div>
+              </div>
+              <div class="macro-chip">
+                <div class="chip-label"><span class="dot bg-fiber"></span>Fiber</div>
+                <div class="chip-val" id="fiberGramText">0g / 30g</div>
               </div>
             </div>
           </div>

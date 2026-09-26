@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     targetCarbs: 180,
     targetProtein: 140,
     targetFats: 65,
+    targetFiber: 30,
     consumedCalories: 0,
     carbs: 0,
     protein: 0,
@@ -34,10 +35,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const carbsTextEl = document.getElementById('carbsGramText');
   const proteinTextEl = document.getElementById('proteinGramText');
   const fatsTextEl = document.getElementById('fatsGramText');
+  const fiberTextEl = document.getElementById('fiberGramText');
 
   const proteinRingArc = document.getElementById('proteinRingArc');
   const carbsRingArc = document.getElementById('carbsRingArc');
   const fatsRingArc = document.getElementById('fatsRingArc');
+  const fiberRingArc = document.getElementById('fiberRingArc');
 
   const waterStatusEl = document.getElementById('waterStatusText');
   const waterProgressFill = document.getElementById('waterProgressFill');
@@ -232,7 +235,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const CIRCUMFERENCE = 2 * Math.PI * 82;
 
   function updateMacroRings() {
-    const ratio = Math.min(state.consumedCalories / state.targetCalories, 1);
+    const targetCal = Math.max(state.targetCalories || 2300, 1);
+    const consumedCal = Math.max(state.consumedCalories || 0, 0);
+    const ratio = Math.min(consumedCal / targetCal, 1.0);
     const percent = Math.round(ratio * 100);
 
     if (consumedEl) consumedEl.textContent = state.consumedCalories.toLocaleString();
@@ -243,9 +248,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const ringCaloriesSub = document.querySelector('.ring-calories-sub');
     if (ringCaloriesSub) ringCaloriesSub.textContent = `of ${state.targetCalories.toLocaleString()} kcal`;
 
-    if (carbsTextEl) carbsTextEl.textContent = `${state.carbs}g / ${state.targetCarbs || 180}g`;
-    if (proteinTextEl) proteinTextEl.textContent = `${state.protein}g / ${state.targetProtein || 140}g`;
-    if (fatsTextEl) fatsTextEl.textContent = `${state.fats}g / ${state.targetFats || 65}g`;
+    const targetC = Math.max(state.targetCarbs || 180, 1);
+    const targetP = Math.max(state.targetProtein || 140, 1);
+    const targetF = Math.max(state.targetFats || 65, 1);
+    const targetFib = Math.max(state.targetFiber || 30, 1);
+
+    if (carbsTextEl) carbsTextEl.textContent = `${state.carbs || 0}g / ${targetC}g`;
+    if (proteinTextEl) proteinTextEl.textContent = `${state.protein || 0}g / ${targetP}g`;
+    if (fatsTextEl) fatsTextEl.textContent = `${state.fats || 0}g / ${targetF}g`;
+    if (fiberTextEl) fiberTextEl.textContent = `${state.fiber || 0}g / ${targetFib}g`;
 
     const overviewConsumed = document.getElementById('overviewConsumed');
     const overviewBurned = document.getElementById('overviewBurned');
@@ -270,29 +281,77 @@ document.addEventListener('DOMContentLoaded', () => {
       balanceRatioBurned.style.width = `${total > 0 ? 100 - consumedRatio : 0}%`;
     }
 
-    // Dynamic Arc Segments (0 when consumedCalories is 0)
-    let proteinSweep = 0;
+    // Dynamic Arc Segments Chaining for All 4 Nutrients (Carbs, Protein, Fats, Fiber)
+    // Target shares ensure proportional balance when all targets are fulfilled
+    const wC = targetC * 4;
+    const wP = targetP * 4;
+    const wF = targetF * 9;
+    const wFib = targetFib * 8; // ensure fiber has a clear, prominent visual slice
+    const wTotal = wC + wP + wF + wFib;
+
+    const shareC = wC / wTotal;
+    const shareP = wP / wTotal;
+    const shareF = wF / wTotal;
+    const shareFib = wFib / wTotal;
+
+    const cVal = Math.max(state.carbs || 0, 0);
+    const pVal = Math.max(state.protein || 0, 0);
+    const fVal = Math.max(state.fats || 0, 0);
+    const fibVal = Math.max(state.fiber || 0, 0);
+
+    // Total ring progress is governed by consumed calories (up to 100% full circle)
+    const totalRingSweep = Math.min(ratio, 1.0) * CIRCUMFERENCE;
+
     let carbsSweep = 0;
+    let proteinSweep = 0;
     let fatsSweep = 0;
+    let fiberSweep = 0;
 
-    if (state.consumedCalories > 0) {
-      proteinSweep = ratio * (state.protein * 4 / state.consumedCalories) * CIRCUMFERENCE;
-      carbsSweep = ratio * (state.carbs * 4 / state.consumedCalories) * CIRCUMFERENCE;
-      fatsSweep = ratio * (state.fats * 9 / state.consumedCalories) * CIRCUMFERENCE;
+    if (totalRingSweep > 0) {
+      const vC = (cVal / targetC) * shareC;
+      const vP = (pVal / targetP) * shareP;
+      const vF = (fVal / targetF) * shareF;
+      const vFib = (fibVal / targetFib) * shareFib;
+      const vSum = vC + vP + vF + vFib;
+
+      if (vSum > 0) {
+        carbsSweep = (vC / vSum) * totalRingSweep;
+        proteinSweep = (vP / vSum) * totalRingSweep;
+        fatsSweep = (vF / vSum) * totalRingSweep;
+        fiberSweep = (vFib / vSum) * totalRingSweep;
+      } else {
+        // Fallback when calories logged without specific macro entries
+        carbsSweep = shareC * totalRingSweep;
+        proteinSweep = shareP * totalRingSweep;
+        fatsSweep = shareF * totalRingSweep;
+        fiberSweep = shareFib * totalRingSweep;
+      }
     }
 
-    if (proteinRingArc) {
-      proteinRingArc.style.strokeDasharray = `${CIRCUMFERENCE}`;
-      proteinRingArc.style.strokeDashoffset = `${CIRCUMFERENCE - Math.min(proteinSweep, CIRCUMFERENCE)}`;
-    }
-    if (carbsRingArc) {
-      carbsRingArc.style.strokeDasharray = `${CIRCUMFERENCE}`;
-      carbsRingArc.style.strokeDashoffset = `${CIRCUMFERENCE - Math.min(carbsSweep, CIRCUMFERENCE)}`;
-    }
-    if (fatsRingArc) {
-      fatsRingArc.style.strokeDasharray = `${CIRCUMFERENCE}`;
-      fatsRingArc.style.strokeDashoffset = `${CIRCUMFERENCE - Math.min(fatsSweep, CIRCUMFERENCE)}`;
-    }
+    // Connect segments end-to-end clockwise around the circle
+    const segments = [
+      { el: carbsRingArc, sweep: carbsSweep },
+      { el: proteinRingArc, sweep: proteinSweep },
+      { el: fatsRingArc, sweep: fatsSweep },
+      { el: fiberRingArc, sweep: fiberSweep }
+    ];
+
+    let currentAngle = 0;
+    segments.forEach(seg => {
+      if (!seg.el) return;
+      if (seg.sweep > 0.5) {
+        seg.el.style.opacity = '1';
+        seg.el.style.strokeDasharray = `${seg.sweep} ${CIRCUMFERENCE}`;
+        seg.el.style.strokeDashoffset = '0';
+        seg.el.style.transform = `rotate(${currentAngle}deg)`;
+        seg.el.setAttribute('transform', `rotate(${currentAngle} 100 100)`);
+        currentAngle += (seg.sweep / CIRCUMFERENCE) * 360;
+      } else {
+        seg.el.style.opacity = '0';
+        seg.el.style.strokeDasharray = `0 ${CIRCUMFERENCE}`;
+        seg.el.style.strokeDashoffset = '0';
+      }
+    });
   }
 
   // Calculate dynamic meal calorie allocations from total daily calories
@@ -416,16 +475,21 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentTargetMeal = getAutoMealTypeByTime();
 
   function createMealItemHtml(name, portion, calories, protein, carbs, fats, fiber = 0, mealType = 'snack') {
-    const fibStr = fiber > 0 ? ` • Fib: ${fiber}g` : '';
+    const calNum = Math.max(0, parseInt(calories, 10) || 0);
+    const pNum = Math.max(0, Math.round(parseFloat(protein) || 0));
+    const cNum = Math.max(0, Math.round(parseFloat(carbs) || 0));
+    const fNum = Math.max(0, Math.round(parseFloat(fats !== undefined && fats !== null ? fats : 0) || 0));
+    const fibNum = Math.max(0, Math.round(parseFloat(fiber) || 0));
+    const fibStr = fibNum > 0 ? ` • Fib: ${fibNum}g` : '';
     const safeName = (name || '').replace(/"/g, '&quot;');
     return `
-      <li class="meal-item" data-cal="${calories}" data-p="${protein}" data-c="${carbs}" data-f="${fats}" data-fib="${fiber}" data-meal-type="${mealType}" data-name="${safeName}">
+      <li class="meal-item" data-cal="${calNum}" data-p="${pNum}" data-c="${cNum}" data-f="${fNum}" data-fib="${fibNum}" data-meal-type="${mealType}" data-name="${safeName}">
         <div style="flex: 1; min-width: 0; padding-right: 8px;">
           <div class="item-title" style="word-break: break-word; font-weight: 600;">${name}</div>
-          <div class="item-macros" style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">${portion} • P: ${protein}g • C: ${carbs}g • F: ${fats}g${fibStr}</div>
+          <div class="item-macros" style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">${portion} • P: ${pNum}g • C: ${cNum}g • F: ${fNum}g${fibStr}</div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-          <span class="item-cal" style="font-weight: 700; font-size: 13px;">${calories} kcal</span>
+          <span class="item-cal" style="font-weight: 700; font-size: 13px;">${calNum} kcal</span>
           <button type="button" class="delete-meal-btn" title="Delete ${safeName}" style="background: rgba(239, 68, 68, 0.1); border: none; color: #ef4444; border-radius: 6px; padding: 4px 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background 0.2s ease;" onmouseover="this.style.background='rgba(239,68,68,0.22)'" onmouseout="this.style.background='rgba(239,68,68,0.1)'">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"></polyline>
@@ -435,6 +499,75 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       </li>
     `;
+  }
+
+  // Recalculates and guarantees macros are never 0 when meals exist in the DOM
+  function recalculateMacrosFromDom() {
+    let domCal = 0;
+    let domP = 0;
+    let domC = 0;
+    let domF = 0;
+    let domFib = 0;
+    let itemCount = 0;
+
+    const listSelectors = ['#breakfastItemList', '#lunchItemList', '#dinnerItemList', '#snackItemList'];
+    listSelectors.forEach(sel => {
+      const container = document.querySelector(sel);
+      if (!container) return;
+      container.querySelectorAll('.meal-item').forEach(li => {
+        itemCount++;
+        let cal = parseInt(li.dataset.cal, 10);
+        let p = parseFloat(li.dataset.p);
+        let c = parseFloat(li.dataset.c);
+        let f = parseFloat(li.dataset.f);
+        let fib = parseFloat(li.dataset.fib);
+
+        if (isNaN(f) || isNaN(p) || isNaN(c)) {
+          const macroEl = li.querySelector('.item-macros');
+          if (macroEl) {
+            const text = macroEl.textContent || '';
+            const mF = text.match(/(?:F|Fat|Fats):\s*([\d\.]+)g/i);
+            const mP = text.match(/P(?:rotein)?:\s*([\d\.]+)g/i);
+            const mC = text.match(/C(?:arbs)?:\s*([\d\.]+)g/i);
+            if (mF && isNaN(f)) { f = parseFloat(mF[1]); li.dataset.f = f; }
+            if (mP && isNaN(p)) { p = parseFloat(mP[1]); li.dataset.p = p; }
+            if (mC && isNaN(c)) { c = parseFloat(mC[1]); li.dataset.c = c; }
+          }
+        }
+        if (isNaN(cal)) {
+          const calEl = li.querySelector('.item-cal');
+          if (calEl) {
+            cal = parseInt((calEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0;
+            li.dataset.cal = cal;
+          }
+        }
+
+        if (!isNaN(cal)) domCal += cal;
+        if (!isNaN(p)) domP += p;
+        if (!isNaN(c)) domC += c;
+        if (!isNaN(f)) domF += f;
+        if (!isNaN(fib)) domFib += fib;
+      });
+    });
+
+    if (itemCount > 0) {
+      if (domF > 0 && (state.fats === 0 || state.fats < domF)) {
+        state.fats = Math.round(domF);
+      }
+      if (domCal > 0 && (state.consumedCalories === 0 || state.consumedCalories < domCal)) {
+        state.consumedCalories = Math.round(domCal);
+      }
+      if (domP > 0 && (state.protein === 0 || state.protein < domP)) {
+        state.protein = Math.round(domP);
+      }
+      if (domC > 0 && (state.carbs === 0 || state.carbs < domC)) {
+        state.carbs = Math.round(domC);
+      }
+      if (domFib > 0 && (!state.fiber || state.fiber < domFib)) {
+        state.fiber = Math.round(domFib);
+      }
+      updateMacroRings();
+    }
   }
 
   function ensureDeleteButtonsInMealLists() {
@@ -451,30 +584,30 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      if (!li.querySelector('.delete-meal-btn')) {
-        let cal = parseInt(li.dataset.cal, 10);
-        if (isNaN(cal)) {
-          const calEl = li.querySelector('.item-cal');
-          if (calEl) {
-            cal = parseInt((calEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0;
-            li.dataset.cal = cal;
-          }
+      let cal = parseInt(li.dataset.cal, 10);
+      if (isNaN(cal)) {
+        const calEl = li.querySelector('.item-cal');
+        if (calEl) {
+          cal = parseInt((calEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0;
+          li.dataset.cal = cal;
         }
-        let p = parseInt(li.dataset.p, 10);
-        let c = parseInt(li.dataset.c, 10);
-        let f = parseInt(li.dataset.f, 10);
-        if (isNaN(p) || isNaN(c) || isNaN(f)) {
-          const macroEl = li.querySelector('.item-macros');
-          if (macroEl) {
-            const matchP = (macroEl.textContent || '').match(/P:\s*(\d+)g/i);
-            const matchC = (macroEl.textContent || '').match(/C:\s*(\d+)g/i);
-            const matchF = (macroEl.textContent || '').match(/F:\s*(\d+)g/i);
-            if (matchP) li.dataset.p = matchP[1];
-            if (matchC) li.dataset.c = matchC[1];
-            if (matchF) li.dataset.f = matchF[1];
-          }
+      }
+      let p = parseFloat(li.dataset.p);
+      let c = parseFloat(li.dataset.c);
+      let f = parseFloat(li.dataset.f);
+      if (isNaN(p) || isNaN(c) || isNaN(f)) {
+        const macroEl = li.querySelector('.item-macros');
+        if (macroEl) {
+          const matchP = (macroEl.textContent || '').match(/P(?:rotein)?:\s*([\d\.]+)g/i);
+          const matchC = (macroEl.textContent || '').match(/C(?:arbs)?:\s*([\d\.]+)g/i);
+          const matchF = (macroEl.textContent || '').match(/(?:F|Fat|Fats):\s*([\d\.]+)g/i);
+          if (matchP) li.dataset.p = matchP[1];
+          if (matchC) li.dataset.c = matchC[1];
+          if (matchF) li.dataset.f = matchF[1];
         }
+      }
 
+      if (!li.querySelector('.delete-meal-btn')) {
         const titleEl = li.querySelector('.item-title');
         const name = titleEl ? titleEl.textContent.trim() : 'Food item';
         li.dataset.name = name;
@@ -507,6 +640,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     });
+
+    recalculateMacrosFromDom();
   }
 
   // Handle Meal Item Deletion
@@ -565,11 +700,17 @@ document.addEventListener('DOMContentLoaded', () => {
       console.warn('[FitTrack] Invalid food item log ignored:', name, calories);
       return;
     }
-    state.consumedCalories += calories;
-    state.protein += protein;
-    state.carbs += carbs;
-    state.fats += fats;
-    state.fiber = (state.fiber || 0) + fiber;
+    const calNum = Math.max(0, parseInt(calories, 10) || 0);
+    const pNum = Math.max(0, Math.round(parseFloat(protein) || 0));
+    const cNum = Math.max(0, Math.round(parseFloat(carbs) || 0));
+    const fNum = Math.max(0, Math.round(parseFloat(fats !== undefined && fats !== null ? fats : 0) || 0));
+    const fibNum = Math.max(0, Math.round(parseFloat(fiber) || 0));
+
+    state.consumedCalories += calNum;
+    state.protein += pNum;
+    state.carbs += cNum;
+    state.fats += fNum;
+    state.fiber = (state.fiber || 0) + fibNum;
 
     let targetList = snackItemList;
     const mealType = currentTargetMeal || getAutoMealTypeByTime();
@@ -695,7 +836,7 @@ document.addEventListener('DOMContentLoaded', () => {
         item.calories,
         item.protein,
         item.carbs,
-        item.fats,
+        item.fats !== undefined && item.fats !== null ? item.fats : (item.fat || 0),
         item.fiber || 0
       );
 
@@ -1038,7 +1179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cal: food.calories || 0,
         p: food.protein || 0,
         c: food.carbs || 0,
-        f: food.fats || 0,
+        f: food.fats !== undefined && food.fats !== null ? food.fats : (food.fat || 0),
         fib: food.fiber || 0,
         mealType: targetMeal
       };
@@ -1567,7 +1708,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fav.calories,
             fav.protein,
             fav.carbs,
-            fav.fats,
+            fav.fats !== undefined && fav.fats !== null ? fav.fats : (fav.fat || 0),
             fav.fiber || 0
           );
           const curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
@@ -2512,6 +2653,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (user.nutritionTargets.targetFats) {
         state.targetFats = user.nutritionTargets.targetFats;
       }
+      if (user.nutritionTargets.targetFiber) {
+        state.targetFiber = user.nutritionTargets.targetFiber;
+      }
       if (user.nutritionTargets.targetWater) {
         state.waterTarget = user.nutritionTargets.targetWater;
       }
@@ -2554,6 +2698,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.targetProtein = curUser.nutritionTargets.targetProtein || 140;
       state.targetCarbs = curUser.nutritionTargets.targetCarbs || 180;
       state.targetFats = curUser.nutritionTargets.targetFats || 65;
+      state.targetFiber = curUser.nutritionTargets.targetFiber || 30;
       state.waterTarget = curUser.nutritionTargets.targetWater || 2500;
       if (targetSlider) {
         targetSlider.value = state.targetCalories;
@@ -2614,6 +2759,8 @@ document.addEventListener('DOMContentLoaded', () => {
     state.carbs = 142;
     state.protein = 98;
     state.fats = 42;
+    state.fiber = 28;
+    state.targetFiber = 30;
     state.waterIntake = 1750;
     state.waterTarget = 2500;
     state.activeBurned = 540;
@@ -2721,12 +2868,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const payload = {
       date: todayStr,
+      updatedAt: Date.now(),
       waterIntake: state.waterIntake || 0,
       waterTarget: state.waterTarget || 2500,
       consumedCalories: state.consumedCalories || 0,
       carbs: state.carbs || 0,
       protein: state.protein || 0,
       fats: state.fats || 0,
+      fat: state.fats || 0,
       fiber: state.fiber || 0,
       activeBurned: state.activeBurned || 0,
       completedExercises: completedSetMap || {},
@@ -2783,12 +2932,32 @@ document.addEventListener('DOMContentLoaded', () => {
       const log = data.log;
       console.log('[FitTrack DB] Loaded daily log from database:', log);
 
+      const dbFats = log.fats !== undefined && log.fats !== null ? log.fats : (log.fat !== undefined ? log.fat : 0);
+
+      // Conflict resolution: Check if local cache has newer tracking (e.g. user logged items before logout)
+      const curEmail = email || '';
+      const localSaved = curEmail ? localStorage.getItem('fittrack_data_' + curEmail) : null;
+      let localParsed = null;
+      try { localParsed = JSON.parse(localSaved || 'null'); } catch (e) {}
+
+      const localUpdatedAt = localParsed?.updatedAt || 0;
+      const dbUpdatedAt = Number(log.updatedAt) || 0;
+      const localFats = localParsed?.fats !== undefined ? localParsed.fats : (localParsed?.fat || 0);
+      const localCal = localParsed?.consumedCalories || 0;
+
+      // If local tracking has more progress or is newer than DB log, keep local and sync forward to cloud
+      if (localParsed && (localUpdatedAt > dbUpdatedAt || localFats > dbFats || localCal > (log.consumedCalories || 0))) {
+        console.log('[FitTrack DB] Local tracking has newer data than DB log. Retaining local and syncing forward...');
+        syncDailyLogToDatabase();
+        return;
+      }
+
       state.waterIntake = log.waterIntake || 0;
       state.waterDate = log.date || todayStr;
       state.consumedCalories = log.consumedCalories || 0;
       state.carbs = log.carbs || 0;
       state.protein = log.protein || 0;
-      state.fats = log.fats || 0;
+      state.fats = dbFats;
       state.fiber = log.fiber || 0;
       if (log.waterTarget) state.waterTarget = log.waterTarget;
       state.activeBurned = log.activeBurned || 0;
@@ -2820,6 +2989,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderExerciseChecklist();
       updateWorkoutHeroUI();
       ensureDeleteButtonsInMealLists();
+      recalculateMacrosFromDom();
       updateMacroRings();
       updateWater();
       updateMealSummaries();
@@ -2829,6 +2999,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Mirror to local cache for instant offline responsiveness
       const userData = {
         date: todayStr,
+        updatedAt: Math.max(Date.now(), Number(log.updatedAt) || 0),
         waterDate: state.waterDate || todayStr,
         waterIntake: state.waterIntake,
         waterTarget: state.waterTarget,
@@ -2837,6 +3008,7 @@ document.addEventListener('DOMContentLoaded', () => {
         carbs: state.carbs,
         protein: state.protein,
         fats: state.fats,
+        fat: state.fats,
         fiber: state.fiber,
         activeBurned: state.activeBurned,
         completedSetMap: completedSetMap || {},
@@ -2899,6 +3071,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const userData = {
       date: todayStr,
+      updatedAt: Date.now(),
       waterDate: state.waterDate || todayStr,
       waterIntake: state.waterIntake,
       waterTarget: state.waterTarget,
@@ -2907,6 +3080,7 @@ document.addEventListener('DOMContentLoaded', () => {
       carbs: state.carbs,
       protein: state.protein,
       fats: state.fats,
+      fat: state.fats,
       fiber: state.fiber,
       activeBurned: state.activeBurned,
       completedSetMap: completedSetMap || {},
@@ -2964,6 +3138,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.targetProtein = curUser.nutritionTargets.targetProtein || state.targetProtein;
       state.targetCarbs = curUser.nutritionTargets.targetCarbs || state.targetCarbs;
       state.targetFats = curUser.nutritionTargets.targetFats || state.targetFats;
+      state.targetFiber = curUser.nutritionTargets.targetFiber || state.targetFiber || 30;
       state.waterTarget = curUser.nutritionTargets.targetWater || state.waterTarget;
       if (targetSlider) {
         targetSlider.value = state.targetCalories;
@@ -3039,7 +3214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         state.carbs = parsed.carbs || 0;
         state.protein = parsed.protein || 0;
-        state.fats = parsed.fats || 0;
+        state.fats = parsed.fats !== undefined && parsed.fats !== null ? parsed.fats : (parsed.fat || 0);
         state.fiber = parsed.fiber || 0;
         if (!curUser?.nutritionTargets?.targetWater && parsed.waterTarget) {
           state.waterTarget = parsed.waterTarget;
@@ -4354,7 +4529,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const headerLogoutBtn = document.getElementById('headerLogoutBtn');
 
-  function performUserLogout(e) {
+  async function performUserLogout(e) {
     if (e) {
       if (typeof e.preventDefault === 'function') e.preventDefault();
       if (typeof e.stopPropagation === 'function') e.stopPropagation();
@@ -4362,8 +4537,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log('[FitTrack] Instant user logout initiated...');
 
-    // 1. Background non-blocking API call
+    // 1. Immediately flush any pending tracking sync BEFORE clearing session credentials!
+    if (syncDebounceTimer) {
+      clearTimeout(syncDebounceTimer);
+      syncDebounceTimer = null;
+    }
     const token = localStorage.getItem('fittrack_token');
+    let curUser = null;
+    try {
+      curUser = JSON.parse(localStorage.getItem('fittrack_user') || 'null');
+    } catch (err) {}
+
+    if (token && curUser && curUser.email) {
+      saveUserData(curUser.email);
+      await syncDailyLogToDatabase().catch(() => {});
+    }
+
+    // 2. Background non-blocking API call
     if (token) {
       fetch('/api/auth/logout', {
         method: 'POST',
@@ -4371,7 +4561,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }).catch(err => console.warn('Logout API error:', err));
     }
 
-    // 2. Instant client-side session cleanup (preserve fittrack_data_<email>)
+    // 3. Instant client-side session cleanup (preserve fittrack_data_<email>)
     try {
       localStorage.removeItem('fittrack_token');
       localStorage.removeItem('fittrack_user');
@@ -4385,7 +4575,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loginEmailInput) loginEmailInput.value = '';
     if (loginPasswordInput) loginPasswordInput.value = '';
 
-    // 3. Instant UI transition to Login / Intro
+    // 4. Instant UI transition to Login / Intro
     showToast('🔒 Logged out successfully!');
     showAuthView('login');
   }
